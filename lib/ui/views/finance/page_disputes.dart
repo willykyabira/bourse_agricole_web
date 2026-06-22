@@ -3,6 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:bourse_agricole_web/ui/widgets/ban_layout.dart';
 
+/// =======================================================
+/// PAGE : GESTION DES LITIGES (UI PRO SaaS)
+/// =======================================================
 class PageDisputes extends StatefulWidget {
   const PageDisputes({super.key});
 
@@ -13,23 +16,32 @@ class PageDisputes extends StatefulWidget {
 class _PageDisputesState extends State<PageDisputes> {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Fonction pour résoudre un litige
+  /// =======================================================
+  /// RESOLUTION LITIGE
+  /// =======================================================
   Future<void> _resolveDispute(int id, String finalStatus) async {
     try {
-      // CORRECTION ICI : 'statut' au lieu de 'status'
       await _supabase
           .from('commandes')
-          .update({'statut': finalStatus}) 
+          .update({'statut': finalStatus})
           .eq('id', id);
 
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Litige traité : commande passée en $finalStatus")),
+        SnackBar(
+          content: Text("Litige traité : $finalStatus"),
+          backgroundColor: Colors.green,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text("Erreur : $e"),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -37,86 +49,185 @@ class _PageDisputesState extends State<PageDisputes> {
   @override
   Widget build(BuildContext context) {
     return BanLayout(
-      title: "GESTION DES LITIGES",
+      title: "CENTRE DES LITIGES",
       activeRoute: '/disputes',
+
       child: StreamBuilder<List<Map<String, dynamic>>>(
-        // CORRECTION ICI : 'statut' au lieu de 'status'
         stream: _supabase
             .from('commandes')
             .stream(primaryKey: ['id'])
             .eq('statut', 'dispute')
             .order('created_at', ascending: false),
+
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return Center(child: Text("Erreur : ${snapshot.error}"));
-          }
 
-          final List<Map<String, dynamic>> data = snapshot.data ?? [];
+          final data = snapshot.data!;
 
+          /// ================= EMPTY STATE =================
           if (data.isEmpty) {
             return Center(
               child: Text(
-                "Aucun litige en cours.",
-                style: GoogleFonts.poppins(color: Colors.green, fontSize: 16, fontWeight: FontWeight.w600),
+                "Aucun litige actif",
+                style: GoogleFonts.poppins(
+                  color: Colors.grey,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             );
           }
 
-          return SingleChildScrollView(
+          /// ================= LIST =================
+          return ListView.separated(
             padding: const EdgeInsets.all(24),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)
-                ],
-              ),
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text("Date")),
-                  DataColumn(label: Text("Client")),
-                  DataColumn(label: Text("Montant")),
-                  DataColumn(label: Text("Action")),
-                ],
-                rows: data.map((Map<String, dynamic> item) {
-                  final dynamic rawPrice = item['prix_total'];
-                  final double price = (rawPrice is num) ? rawPrice.toDouble() : 0.0;
-                  
-                  final String date = item['created_at']?.toString().split('T')[0] ?? "N/A";
-                  final String clientName = (item['nom_client'] ?? "Inconnu").toString();
+            itemCount: data.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
 
-                  return DataRow(cells: [
-                    DataCell(Text(date)),
-                    DataCell(Text(clientName)),
-                    // Note: Concaténation simple pour éviter tout conflit avec le caractère $
-                    DataCell(Text(price.toStringAsFixed(2) + " \$")),
-                    DataCell(
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.check_circle_outline, color: Colors.blue),
-                            tooltip: "Valider malgré le litige",
-                            onPressed: () => _resolveDispute(item['id'] as int, 'validated'),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_forever, color: Colors.red),
-                            tooltip: "Annuler la commande",
-                            onPressed: () => _resolveDispute(item['id'] as int, 'cancelled'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ]);
-                }).toList(),
-              ),
-            ),
+            itemBuilder: (context, index) {
+              return _DisputeCard(
+                item: data[index],
+                onValidate: () =>
+                    _resolveDispute(data[index]['id'], 'validated'),
+                onCancel: () =>
+                    _resolveDispute(data[index]['id'], 'cancelled'),
+              );
+            },
           );
         },
+      ),
+    );
+  }
+}
+
+/// =======================================================
+/// CARD LITIGE (UI SaaS PRO)
+/// =======================================================
+class _DisputeCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onValidate;
+  final VoidCallback onCancel;
+
+  const _DisputeCard({
+    required this.item,
+    required this.onValidate,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final double price =
+        (item['prix_total'] as num?)?.toDouble() ?? 0.0;
+
+    final String date =
+        item['created_at']?.toString().split('T')[0] ?? "--";
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 14,
+          )
+        ],
+
+        border: Border.all(color: Colors.red.withOpacity(0.15)),
+      ),
+
+      child: Row(
+        children: [
+
+          /// ================= INFO =================
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                /// CLIENT
+                Text(
+                  item['nom_client'] ?? "Client inconnu",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                /// DATE
+                Text(
+                  "Date: $date",
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                /// MONTANT
+                Text(
+                  "${price.toStringAsFixed(2)} \$",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          /// ================= BADGE =================
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 5,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFEBEE),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              "LITIGE",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFC62828),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          /// ================= ACTIONS =================
+          Row(
+            children: [
+
+              /// VALIDATE
+              IconButton(
+                tooltip: "Valider commande",
+                onPressed: onValidate,
+                icon: const Icon(Icons.check_circle),
+                color: Colors.green,
+              ),
+
+              /// CANCEL
+              IconButton(
+                tooltip: "Annuler commande",
+                onPressed: onCancel,
+                icon: const Icon(Icons.cancel),
+                color: Colors.red,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

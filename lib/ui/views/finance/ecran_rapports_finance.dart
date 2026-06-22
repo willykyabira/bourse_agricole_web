@@ -3,38 +3,58 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:bourse_agricole_web/ui/widgets/ban_layout.dart';
 
+/// =======================================================
+/// ÉCRAN : RAPPORTS FINANCIERS (UI PRO UPGRADE)
+/// =======================================================
 class EcranRapportsFinance extends StatelessWidget {
   const EcranRapportsFinance({super.key});
 
+  /// ================= STATUS FORMAT =================
   String getFriendlyStatus(String status) {
     switch (status.toLowerCase()) {
-      case 'paye': return 'Payé';
-      case 'proforma': return 'Proforma';
-      case 'reserve': return 'En Réserve';
-      case 'en_cours_livraison': return 'En Livraison';
-      case 'livre': return 'Livré';
-      case 'dispute': return 'Litige';
-      default: return status;
+      case 'paye':
+        return 'PAYÉ';
+      case 'proforma':
+        return 'PROFORMA';
+      case 'reserve':
+        return 'RÉSERVÉ';
+      case 'en_cours_livraison':
+        return 'LIVRAISON';
+      case 'livre':
+        return 'LIVRÉ';
+      case 'dispute':
+        return 'LITIGE';
+      default:
+        return status.toUpperCase();
     }
   }
 
-  String formatCurrency(double value) => "${value.toStringAsFixed(2)} \$";
+  /// ================= CURRENCY FORMAT =================
+  String formatCurrency(double value) =>
+      "${value.toStringAsFixed(2)} \$";
 
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
 
     return BanLayout(
-      title: "Rapports Financiers",
+      title: "RAPPORTS FINANCIERS",
       activeRoute: '/reports_finance',
+
       child: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: supabase.from('commandes').stream(primaryKey: ['id']).order('created_at', ascending: false),
+        stream: supabase
+            .from('commandes')
+            .stream(primaryKey: ['id'])
+            .order('created_at', ascending: false),
+
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final data = snapshot.data ?? [];
 
+          final data = snapshot.data!;
+
+          /// ================= KPI CALCULATION =================
           double totalPaye = 0;
           double totalEnAttente = 0;
           double totalTransport = 0;
@@ -43,47 +63,100 @@ class EcranRapportsFinance extends StatelessWidget {
           double totalCommission = 0;
           double totalTva = 0;
 
-          for (var item in data) {
+          for (final item in data) {
             final val = (item['prix_total'] as num?)?.toDouble() ?? 0.0;
-            final statut = (item['statut'] as String? ?? '').toLowerCase();
+            final statut = (item['statut'] ?? '').toString().toLowerCase();
 
-            totalTransport += (item['frais_transport'] as num?)?.toDouble() ?? 0.0;
-            totalManutention += (item['frais_manutention'] as num?)?.toDouble() ?? 0.0;
-            totalStockage += (item['frais_stockage'] as num?)?.toDouble() ?? 0.0;
-            totalCommission += (item['commission'] as num?)?.toDouble() ?? 0.0;
+            totalTransport +=
+                (item['frais_transport'] as num?)?.toDouble() ?? 0.0;
+            totalManutention +=
+                (item['frais_manutention'] as num?)?.toDouble() ?? 0.0;
+            totalStockage +=
+                (item['frais_stockage'] as num?)?.toDouble() ?? 0.0;
+            totalCommission +=
+                (item['commission'] as num?)?.toDouble() ?? 0.0;
             totalTva += (item['montant_tva'] as num?)?.toDouble() ?? 0.0;
 
             if (statut == 'paye') {
               totalPaye += val;
-            } else if (statut == 'proforma' || statut == 'reserve' || statut == 'en_cours_livraison') {
+            } else {
               totalEnAttente += val;
             }
           }
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
+
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Vue d'ensemble", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold)),
+
+                /// ================= HEADER =================
+                Text(
+                  "Vue financière globale",
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
                 const SizedBox(height: 20),
+
+                /// ================= KPI GRID =================
                 Wrap(
-                  spacing: 20,
-                  runSpacing: 20,
+                  spacing: 16,
+                  runSpacing: 16,
                   children: [
-                    _kpiCard("Total Payé", formatCurrency(totalPaye), Colors.green),
-                    _kpiCard("À Recevoir", formatCurrency(totalEnAttente), Colors.orange),
-                    _kpiCard("Transport", formatCurrency(totalTransport), Colors.blueGrey),
-                    _kpiCard("Manutention", formatCurrency(totalManutention), Colors.blueGrey),
-                    _kpiCard("Frais Stockage", formatCurrency(totalStockage), Colors.blueGrey),
-                    _kpiCard("Commission", formatCurrency(totalCommission), Colors.purple),
-                    _kpiCard("Total TVA", formatCurrency(totalTva), Colors.redAccent),
+                    _kpiCard("Payé", totalPaye, Colors.green, Icons.check_circle),
+                    _kpiCard("À recevoir", totalEnAttente, Colors.orange, Icons.pending),
+                    _kpiCard("Transport", totalTransport, Colors.blue, Icons.local_shipping),
+                    _kpiCard("Manutention", totalManutention, Colors.indigo, Icons.handyman),
+                    _kpiCard("Stockage", totalStockage, Colors.teal, Icons.warehouse),
+                    _kpiCard("Commission", totalCommission, Colors.purple, Icons.percent),
+                    _kpiCard("TVA", totalTva, Colors.red, Icons.receipt),
                   ],
                 ),
-                const SizedBox(height: 40),
-                Text("Détail des Transactions", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 10),
-                _buildHistoryTable(data),
+
+                const SizedBox(height: 30),
+
+                /// ================= SECTION TITLE =================
+                Text(
+                  "Transactions détaillées",
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                /// ================= LIST MODERNE =================
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 20,
+                      )
+                    ],
+                  ),
+
+                  child: data.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.all(30),
+                          child: Center(child: Text("Aucune donnée")),
+                        )
+                      : Column(
+                          children: data.map((item) {
+                            return _FinanceRow(
+                              item: item,
+                              getFriendlyStatus: getFriendlyStatus,
+                            );
+                          }).toList(),
+                        ),
+                ),
               ],
             ),
           );
@@ -92,63 +165,170 @@ class EcranRapportsFinance extends StatelessWidget {
     );
   }
 
-  Widget _kpiCard(String title, String value, Color color) {
+  /// =======================================================
+  /// KPI CARD (SaaS STYLE)
+  /// =======================================================
+  Widget _kpiCard(
+    String title,
+    double value,
+    Color color,
+    IconData icon,
+  ) {
     return Container(
-      width: 200,
-      padding: const EdgeInsets.all(20),
+      width: 180,
+      padding: const EdgeInsets.all(16),
+
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 13)),
-        const SizedBox(height: 8),
-        Text(value, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-      ]),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+          )
+        ],
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(height: 10),
+
+          Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            "${value.toStringAsFixed(2)} \$",
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
 
-  Widget _buildHistoryTable(List<Map<String, dynamic>> data) {
+/// =======================================================
+/// ROW FINANCIÈRE PRO (CARD STYLE)
+/// =======================================================
+class _FinanceRow extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final String Function(String) getFriendlyStatus;
+
+  const _FinanceRow({
+    required this.item,
+    required this.getFriendlyStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = (item['prix_total'] as num?)?.toDouble() ?? 0.0;
+
     return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: const [
-            DataColumn(label: Text("Date")),
-            DataColumn(label: Text("Client")),
-            DataColumn(label: Text("Transport")),
-            DataColumn(label: Text("Manutention")),
-            DataColumn(label: Text("Stockage")),
-            DataColumn(label: Text("Commission")),
-            DataColumn(label: Text("TVA (16%)")),
-            DataColumn(label: Text("Total TTC")),
-            DataColumn(label: Text("Statut")),
-          ],
-          rows: data.map((item) {
-            final trans = (item['frais_transport'] as num?)?.toDouble() ?? 0.0;
-            final manut = (item['frais_manutention'] as num?)?.toDouble() ?? 0.0;
-            final stock = (item['frais_stockage'] as num?)?.toDouble() ?? 0.0;
-            final comm = (item['commission'] as num?)?.toDouble() ?? 0.0;
-            final tva = (item['montant_tva'] as num?)?.toDouble() ?? 0.0;
-            final total = (item['prix_total'] as num?)?.toDouble() ?? 0.0;
+      padding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 14,
+      ),
 
-            return DataRow(cells: [
-              DataCell(Text(item['created_at']?.toString().split('T')[0] ?? "N/A")),
-              DataCell(Text(item['nom_client'] ?? "Inconnu")),
-              DataCell(Text("${trans.toStringAsFixed(2)} \$")),
-              DataCell(Text("${manut.toStringAsFixed(2)} \$")),
-              DataCell(Text(stock > 0 ? "${stock.toStringAsFixed(2)} \$" : "-")),
-              DataCell(Text("${comm.toStringAsFixed(2)} \$")),
-              DataCell(Text("${tva.toStringAsFixed(2)} \$")),
-              DataCell(Text("${total.toStringAsFixed(2)} \$", style: const TextStyle(fontWeight: FontWeight.bold))),
-              DataCell(Chip(label: Text(getFriendlyStatus(item['statut'] ?? "")))),
-            ]);
-          }).toList(),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade100),
+        ),
+      ),
+
+      child: Row(
+        children: [
+
+          /// DATE
+          Expanded(
+            flex: 2,
+            child: Text(
+              item['created_at']?.toString().split('T')[0] ?? "--",
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ),
+
+          /// CLIENT
+          Expanded(
+            flex: 3,
+            child: Text(
+              item['nom_client'] ?? "Inconnu",
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+
+          /// TOTAL
+          Expanded(
+            flex: 2,
+            child: Text(
+              "${total.toStringAsFixed(2)} \$",
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          /// STATUS
+          Expanded(
+            flex: 2,
+            child: Center(
+              child: _StatusBadge(
+                getFriendlyStatus(item['statut'] ?? ""),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// =======================================================
+/// STATUS BADGE PRO
+/// =======================================================
+class _StatusBadge extends StatelessWidget {
+  final String status;
+
+  const _StatusBadge(this.status);
+
+  @override
+  Widget build(BuildContext context) {
+    final isPaid = status == "PAYÉ";
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: isPaid
+            ? const Color(0xFFE8F5E9)
+            : const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: isPaid
+              ? const Color(0xFF1B5E20)
+              : const Color(0xFFE65100),
         ),
       ),
     );

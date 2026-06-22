@@ -194,7 +194,7 @@ class _EcranConnexionState extends State<EcranConnexion> {
               style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
           const SizedBox(height: 40),
           _buildServiceBox(Icons.inventory_2_outlined, "Gestion des stocks", "Supervision précise des inventaires agricoles."),
-          _buildServiceBox(Icons.account_balance_wallet_outlined, "Gestionnaires financières", "Contrôle des flux et paiements des coopératives."),
+          _buildServiceBox(Icons.account_balance_wallet_outlined, "Gestion financière", "Contrôle des flux et paiements des coopératives."),
           _buildServiceBox(Icons.admin_panel_settings_outlined, "Administration système", "Pilotage des accès et rapports de la province de l'Ituri."),
         ],
       ),

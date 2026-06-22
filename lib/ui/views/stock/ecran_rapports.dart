@@ -1,13 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pdf/pdf.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:csv/csv.dart';
 import 'package:universal_html/html.dart' as html;
+
 import '../../widgets/ban_layout.dart';
 
+/// =======================================================
+/// ÉCRAN RAPPORTS (VERSION PRO + EXPORT PDF AMÉLIORÉ)
+/// =======================================================
 class EcranRapports extends StatelessWidget {
   const EcranRapports({super.key});
 
@@ -16,87 +21,301 @@ class EcranRapports extends StatelessWidget {
     final supabase = Supabase.instance.client;
 
     return BanLayout(
-      title: "CENTRE DE RAPPORTS DYNAMIQUES",
+      title: "CENTRE DE RAPPORTS",
       activeRoute: '/reports_stock',
+
       child: Padding(
-        padding: const EdgeInsets.all(30),
+        padding: const EdgeInsets.all(24),
+
+        /// STREAM PRODUITS
         child: StreamBuilder(
           stream: supabase.from('produits').stream(primaryKey: ['id']),
+
           builder: (context, snapshotEntrees) {
+            /// STREAM SORTIES
             return StreamBuilder(
               stream: supabase.from('sorties').stream(primaryKey: ['id']),
+
               builder: (context, snapshotSorties) {
-                if (!snapshotEntrees.hasData || !snapshotSorties.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                if (!snapshotEntrees.hasData ||
+                    !snapshotSorties.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
                 }
 
-                // --- LOGIQUE DE CALCUL ---
-                double valeurTotaleStock = 0;
-                double volumeSortiesMois = 0;
-                int alertesStockFaible = 0;
-                Map<String, double> stocksParProduit = {};
+                final produits = snapshotEntrees.data!;
+                final sorties = snapshotSorties.data!;
 
-                for (var row in snapshotEntrees.data!) {
-                  double qte = double.tryParse(row['quantite'].toString()) ?? 0.0;
-                  double prix = double.tryParse(row['prix_total'].toString()) ?? 0.0;
-                  valeurTotaleStock += prix;
-                  String nom = row['nom_produit'];
-                  stocksParProduit[nom] = (stocksParProduit[nom] ?? 0) + qte;
+                /// ===============================
+                /// BUSINESS LOGIC (SAFE)
+                /// ===============================
+                double valeurStock = 0;
+                double volumeSorties = 0;
+                int alertes = 0;
+
+                final Map<String, double> stockMap = {};
+
+                /// STOCK INITIAL
+                for (final p in produits) {
+                  final qte = (p['quantite'] ?? 0).toDouble();
+                  final prix = (p['prix_total'] ?? 0).toDouble();
+
+                  valeurStock += prix;
+
+                  final nom = (p['nom_produit'] ?? "Inconnu").toString();
+                  stockMap[nom] = (stockMap[nom] ?? 0) + qte;
                 }
 
-                for (var row in snapshotSorties.data!) {
-                  double qteSortie = double.tryParse(row['quantite'].toString()) ?? 0.0;
-                  volumeSortiesMois += qteSortie;
-                  String nom = row['nom_produit'];
-                  if (stocksParProduit.containsKey(nom)) {
-                    stocksParProduit[nom] = stocksParProduit[nom]! - qteSortie;
+                /// SORTIES
+                for (final s in sorties) {
+                  final qte = (s['quantite'] ?? 0).toDouble();
+                  volumeSorties += qte;
+
+                  final nom = (s['nom_produit'] ?? "Inconnu").toString();
+
+                  if (stockMap.containsKey(nom)) {
+                    stockMap[nom] = stockMap[nom]! - qte;
                   }
                 }
 
-                stocksParProduit.forEach((nom, qte) {
-                  if (qte < 10) alertesStockFaible++;
+                /// ALERTES
+                stockMap.forEach((_, v) {
+                  if (v < 10) alertes++;
                 });
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("RAPPORT DE SYNTHÈSE (TEMPS RÉEL)", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF1A237E))),
-                    const SizedBox(height: 25),
-                    
-                    _buildFeaturedReport(
-                      context,
-                      title: "Rapport de Valorisation BAN",
-                      description: "Valeur actuelle du stock : ${valeurTotaleStock.toStringAsFixed(2)} \$ USD. Volume total des sorties : ${volumeSortiesMois.toStringAsFixed(1)} Kg. $alertesStockFaible produit(s) en rupture critique.",
-                      icon: Icons.assignment_turned_in_outlined,
-                      color: const Color(0xFF1B5E20),
-                      onDownload: () async {
-                        final pdf = pw.Document();
-                        pdf.addPage(pw.Page(build: (pw.Context context) => pw.Center(child: pw.Text("Rapport BAN: $valeurTotaleStock \$"))));
-                        await Printing.layoutPdf(onLayout: (format) => pdf.save());
-                      }
-                    ),
-                    
-                    const SizedBox(height: 40),
-                    Text("AUTRES DOCUMENTS COMPTABLES", style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey)),
-                    const Divider(),
-                    
-                    Expanded(
-                      child: ListView(
+                return SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+
+                      /// HEADER UI
+                      _buildHeader(),
+
+                      const SizedBox(height: 20),
+
+                      /// KPI
+                      Row(
                         children: [
-                          _buildReportItem("Registre des Mouvements (Journal)", "CSV", Icons.history, () async {
-                            List<List<dynamic>> rows = [["Produit", "Quantité"], ...stocksParProduit.entries.map((e) => [e.key, e.value])];
-                            String csv = const ListToCsvConverter().convert(rows);
-                            final bytes = utf8.encode(csv);
-                            final blob = html.Blob([bytes]);
-                            final url = html.Url.createObjectUrlFromBlob(blob);
-                            html.AnchorElement(href: url)..setAttribute("download", "mouvements.csv")..click();
-                          }),
-                          _buildReportItem("État de Valorisation par Entrepôt", "PDF", Icons.account_balance_wallet_outlined, () {}),
-                          _buildReportItem("Analyse des Pertes et Écarts", "PDF", Icons.trending_down, () {}),
+                          _kpiCard(
+                            "Stock total",
+                            "${valeurStock.toStringAsFixed(2)} \$",
+                            Icons.inventory,
+                          ),
+                          const SizedBox(width: 12),
+                          _kpiCard(
+                            "Sorties",
+                            "${volumeSorties.toStringAsFixed(1)} Kg",
+                            Icons.trending_down,
+                          ),
+                          const SizedBox(width: 12),
+                          _kpiCard(
+                            "Alertes",
+                            "$alertes",
+                            Icons.warning_amber,
+                          ),
                         ],
                       ),
-                    ),
-                  ],
+
+                      const SizedBox(height: 25),
+
+                      /// ===============================
+                      /// RAPPORT PRINCIPAL + PDF PRO
+                      /// ===============================
+                      _featuredReport(
+                        title: "Rapport global BAN",
+                        subtitle:
+                            "Stock: ${valeurStock.toStringAsFixed(2)} \$ • Sorties: ${volumeSorties.toStringAsFixed(1)} Kg • Alertes: $alertes",
+                        color: const Color(0xFF1B5E20),
+
+                        /// ================= PDF EXPORT PRO =================
+                        onDownload: () async {
+                          final pdf = pw.Document();
+                          final date = DateTime.now();
+
+                          pdf.addPage(
+                            pw.MultiPage(
+                              pageFormat: PdfPageFormat.a4,
+                              margin: const pw.EdgeInsets.all(20),
+
+                              build: (context) => [
+
+                                /// HEADER PDF
+                                pw.Container(
+                                  padding: const pw.EdgeInsets.all(12),
+                                  decoration: const pw.BoxDecoration(
+                                    color: PdfColors.green800,
+                                  ),
+                                  child: pw.Column(
+                                    crossAxisAlignment:
+                                        pw.CrossAxisAlignment.start,
+                                    children: [
+                                      pw.Text(
+                                        "RAPPORT GLOBAL BAN",
+                                        style: pw.TextStyle(
+                                          fontSize: 20,
+                                          color: PdfColors.white,
+                                          fontWeight: pw.FontWeight.bold,
+                                        ),
+                                      ),
+                                      pw.SizedBox(height: 4),
+                                      pw.Text(
+                                        "Généré le : "
+                                        "${date.day}/${date.month}/${date.year}",
+                                        style: const pw.TextStyle(
+                                          fontSize: 10,
+                                          color: PdfColors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                pw.SizedBox(height: 20),
+
+                                /// KPI TABLE
+                                pw.Text(
+                                  "INDICATEURS",
+                                  style: pw.TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+
+                                pw.SizedBox(height: 10),
+
+                                pw.Table.fromTextArray(
+                                  headers: [
+                                    "Indicateur",
+                                    "Valeur"
+                                  ],
+                                  data: [
+                                    [
+                                      "Valeur stock",
+                                      "${valeurStock.toStringAsFixed(2)} \$"
+                                    ],
+                                    [
+                                      "Volume sorties",
+                                      "${volumeSorties.toStringAsFixed(1)} Kg"
+                                    ],
+                                    [
+                                      "Alertes",
+                                      "$alertes"
+                                    ],
+                                  ],
+                                  headerStyle: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.white,
+                                  ),
+                                  headerDecoration:
+                                      const pw.BoxDecoration(
+                                    color: PdfColors.green700,
+                                  ),
+                                  cellStyle: const pw.TextStyle(
+                                    fontSize: 10,
+                                  ),
+                                ),
+
+                                pw.SizedBox(height: 20),
+
+                                /// STOCK DETAIL
+                                pw.Text(
+                                  "DETAIL STOCK",
+                                  style: pw.TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+
+                                pw.SizedBox(height: 10),
+
+                                pw.Table.fromTextArray(
+                                  headers: ["Produit", "Quantité"],
+                                  data: stockMap.entries
+                                      .map(
+                                        (e) => [
+                                          e.key,
+                                          e.value.toStringAsFixed(1)
+                                        ],
+                                      )
+                                      .toList(),
+                                  headerStyle: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.white,
+                                  ),
+                                  headerDecoration:
+                                      const pw.BoxDecoration(
+                                    color: PdfColors.green700,
+                                  ),
+                                  cellStyle: const pw.TextStyle(
+                                    fontSize: 10,
+                                  ),
+                                ),
+
+                                pw.SizedBox(height: 20),
+
+                                pw.Divider(),
+
+                                pw.Text(
+                                  "BAN - Système de gestion agricole",
+                                  style: const pw.TextStyle(
+                                    fontSize: 9,
+                                    color: PdfColors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          await Printing.layoutPdf(
+                            onLayout: (format) => pdf.save(),
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      /// EXPORTS CSV
+                      Text(
+                        "EXPORTS DISPONIBLES",
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      _exportItem(
+                        "Journal des mouvements",
+                        "CSV",
+                        Icons.table_chart,
+                        () {
+                          final rows = [
+                            ["Produit", "Stock"],
+                            ...stockMap.entries.map(
+                              (e) => [e.key, e.value],
+                            ),
+                          ];
+
+                          final csv =
+                              const ListToCsvConverter().convert(rows);
+                          final bytes = utf8.encode(csv);
+
+                          final blob = html.Blob([bytes]);
+                          final url =
+                              html.Url.createObjectUrlFromBlob(blob);
+
+                          html.AnchorElement(href: url)
+                            ..setAttribute(
+                              "download",
+                              "rapport_stock.csv",
+                            )
+                            ..click();
+                        },
+                      ),
+                    ],
+                  ),
                 );
               },
             );
@@ -106,35 +325,119 @@ class EcranRapports extends StatelessWidget {
     );
   }
 
-  Widget _buildFeaturedReport(BuildContext context, {required String title, required String description, required IconData icon, required Color color, required VoidCallback onDownload}) {
+  // ================= HEADER =================
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(25),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.3), width: 2), boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 15)]),
-      child: Row(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.green.shade800,
+            Colors.green.shade500,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
         children: [
-          Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 45)),
-          const SizedBox(width: 25),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 10), Text(description, style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.5))])),
-          ElevatedButton.icon(
-            onPressed: onDownload, 
-            icon: const Icon(Icons.download_for_offline, color: Colors.white),
-            label: const Text("TÉLÉCHARGER LE RAPPORT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(backgroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 22), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+          Icon(Icons.bar_chart, color: Colors.white, size: 40),
+          SizedBox(width: 12),
+          Text(
+            "Dashboard Rapports",
+            style: TextStyle(color: Colors.white, fontSize: 18),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildReportItem(String title, String format, IconData icon, VoidCallback onTap) {
+  // ================= KPI =================
+  Widget _kpiCard(String title, String value, IconData icon) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(color: Colors.black12, blurRadius: 10)
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: Colors.green),
+            const SizedBox(height: 10),
+            Text(title),
+            Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================= FEATURED =================
+  Widget _featuredReport({
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onDownload,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.description, color: color, size: 40),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(subtitle),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: onDownload,
+            child: const Text("Exporter"),
+          )
+        ],
+      ),
+    );
+  }
+
+  // ================= EXPORT ITEM =================
+  Widget _exportItem(
+    String title,
+    String format,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
     return Card(
-      elevation: 0, margin: const EdgeInsets.only(bottom: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: BorderSide(color: Colors.grey.shade200)),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        leading: Icon(icon, color: Colors.blueGrey),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text("Format de sortie : $format"),
-        trailing: IconButton(onPressed: onTap, icon: const Icon(Icons.print_outlined, color: Color(0xFF1A237E))),
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text("Format: $format"),
+        trailing: IconButton(
+          icon: const Icon(Icons.download),
+          onPressed: onTap,
+        ),
       ),
     );
   }

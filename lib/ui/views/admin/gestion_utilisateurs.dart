@@ -13,20 +13,41 @@ class GestionUtilisateurs extends StatefulWidget {
 class _GestionUtilisateursState extends State<GestionUtilisateurs> {
   final SupabaseClient supabase = Supabase.instance.client;
   bool _isPasswordVisible = false;
+  
+  // Liste pour stocker les entrepôts récupérés
+  List<Map<String, dynamic>> _entrepots = [];
 
   // Écoute en temps réel de la table 'profiles'
   final Stream<List<Map<String, dynamic>>> _usersStream = 
       Supabase.instance.client.from('profiles').stream(primaryKey: ['id']).order('nom_complet');
 
+  @override
+  void initState() {
+    super.initState();
+    _fetchEntrepots();
+  }
+
+  // Récupération des entrepôts pour le menu déroulant
+  Future<void> _fetchEntrepots() async {
+    try {
+      final data = await supabase.from('entrepots').select('id, nom');
+      setState(() {
+        _entrepots = data;
+      });
+    } catch (e) {
+      debugPrint("Erreur chargement entrepôts: $e");
+    }
+  }
+
   // --- LOGIQUE DE CRÉATION ET SYNCHRONISATION ---
-  Future<void> _creerUtilisateur(String nom, String email, String tel, String pass, String role) async {
+  Future<void> _creerUtilisateur(String nom, String email, String tel, String pass, String role, String? entrepotId) async {
     if (nom.isEmpty || email.isEmpty || pass.isEmpty) {
       _showSnack("Veuillez remplir les champs obligatoires", Colors.orange);
       return;
     }
 
     try {
-      // ÉTAPE 1 : Création dans Supabase Auth (Sécurité)
+      // ÉTAPE 1 : Création dans Supabase Auth
       final AuthResponse res = await supabase.auth.signUp(
         email: email.trim(),
         password: pass.trim(),
@@ -35,14 +56,14 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
       final String? userId = res.user?.id;
 
       if (userId != null) {
-        // ÉTAPE 2 : Insertion MANUELLE dans la table 'profiles' 
-        // C'est cette étape qui rend l'utilisateur visible dans votre liste
-        await supabase.from('profiles').insert({
+        // ÉTAPE 2 : UPSERT (Crée ou met à jour si l'ID existe déjà)
+        await supabase.from('profiles').upsert({
           'id': userId,
           'nom_complet': nom.trim(),
           'email': email.trim(),
           'telephone': tel.trim(),
           'role': role,
+          'entrepot_id': entrepotId, // Liaison avec l'entrepôt choisi
         });
 
         if (mounted) {
@@ -58,6 +79,7 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
   }
 
   void _showSnack(String msg, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: color),
     );
@@ -113,7 +135,7 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
                             return Center(child: Text("Erreur de flux : ${snapshot.error}"));
                           }
                           final users = snapshot.data ?? [];
-                          if (users.isEmpty) return const Center(child: Text("Aucun compte trouvé dans 'profiles'."));
+                          if (users.isEmpty) return const Center(child: Text("Aucun compte trouvé."));
                           return _buildUserList(users);
                         },
                       ),
@@ -133,7 +155,9 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
     final TextEditingController emailCtrl = TextEditingController();
     final TextEditingController telCtrl = TextEditingController();
     final TextEditingController passCtrl = TextEditingController();
-    String selectedRole = 'stock'; // Par défaut Gestionnaire
+    
+    String selectedRole = 'stock';
+    String? selectedEntrepotId;
 
     showDialog(
       context: context,
@@ -155,11 +179,22 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
                   const SizedBox(height: 12),
                   _buildField(telCtrl, "Contact (Ituri)", Icons.phone_android, type: TextInputType.phone),
                   const SizedBox(height: 12),
+                  
+                  // Menu déroulant Entrepôt
+                  DropdownButtonFormField<String>(
+                    decoration: _inputDecoration("Choisir un entrepôt", Icons.store_mall_directory_outlined),
+                    value: selectedEntrepotId,
+                    items: _entrepots.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nom']))).toList(),
+                    onChanged: (v) => setDialogState(() => selectedEntrepotId = v),
+                  ),
+                  const SizedBox(height: 12),
+
                   _buildField(passCtrl, "Mot de passe temporaire", Icons.lock_outline, 
                     isPass: true, 
                     isVisible: _isPasswordVisible, 
                     onToggle: () => setDialogState(() => _isPasswordVisible = !_isPasswordVisible)),
                   const SizedBox(height: 20),
+                  
                   DropdownButtonFormField<String>(
                     value: selectedRole,
                     decoration: _inputDecoration("Attribuer un rôle", Icons.verified_user_outlined),
@@ -177,7 +212,7 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
             ElevatedButton(
-              onPressed: () => _creerUtilisateur(nomCtrl.text, emailCtrl.text, telCtrl.text, passCtrl.text, selectedRole),
+              onPressed: () => _creerUtilisateur(nomCtrl.text, emailCtrl.text, telCtrl.text, passCtrl.text, selectedRole, selectedEntrepotId),
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
               child: const Text("CRÉER L'ACCÈS", style: TextStyle(color: Colors.white)),
             ),
@@ -198,7 +233,7 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
       child: Row(children: [
         const Icon(Icons.shield_outlined, color: Color(0xFF1B5E20), size: 24), 
         const SizedBox(width: 15), 
-        Expanded(child: Text("Centre de gestion des identités BAN. Les comptes créés ici ont accès aux modules spécifiques de la plateforme.", 
+        Expanded(child: Text("Centre de gestion des identités BAN.", 
           style: GoogleFonts.poppins(color: const Color(0xFF1B5E20), fontSize: 13)))
       ]),
     );

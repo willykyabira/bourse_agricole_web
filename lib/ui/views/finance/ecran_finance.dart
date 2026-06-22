@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:bourse_agricole_web/ui/widgets/ban_layout.dart';
 
+/// =======================================================
+/// DASHBOARD FINANCE (VERSION PRO UI SaaS)
+/// =======================================================
 class EcranFinance extends StatelessWidget {
   const EcranFinance({super.key});
 
@@ -14,56 +17,65 @@ class EcranFinance extends StatelessWidget {
     return BanLayout(
       title: "Tableau de Bord Financier",
       activeRoute: '/finance',
+
+      /// STREAM COMMANDES (REALTIME)
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase.from('commandes').stream(primaryKey: ['id']),
+
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           final data = snapshot.data ?? [];
-          
-          // 1. Calculs des KPIs (Restauration de votre logique originale)
-          double totalPaye = 0;
-          double totalEnAttente = 0;
+
+          /// =======================================================
+          /// BUSINESS KPIs
+          /// =======================================================
+          double totalGlobal = 0;
           double totalTransport = 0;
           double totalManutention = 0;
           double totalStockage = 0;
           double totalCommission = 0;
           double totalTva = 0;
 
-          for (var item in data) {
-            final val = (item['prix_total'] as num?)?.toDouble() ?? 0.0;
-            final statut = (item['statut'] as String? ?? '').toLowerCase();
+          for (final item in data) {
+            final val = (item['prix_total'] as num?)?.toDouble() ?? 0;
 
-            totalTransport += (item['frais_transport'] as num?)?.toDouble() ?? 0.0;
-            totalManutention += (item['frais_manutention'] as num?)?.toDouble() ?? 0.0;
-            totalStockage += (item['frais_stockage'] as num?)?.toDouble() ?? 0.0;
-            totalCommission += (item['commission'] as num?)?.toDouble() ?? 0.0;
-            totalTva += (item['montant_tva'] as num?)?.toDouble() ?? 0.0;
-
-            if (statut == 'paye') {
-              totalPaye += val;
-            } else if (statut == 'proforma' || statut == 'reserve' || statut == 'en_cours_livraison') {
-              totalEnAttente += val;
-            }
+            totalGlobal += val;
+            totalTransport += (item['frais_transport'] as num?)?.toDouble() ?? 0;
+            totalManutention += (item['frais_manutention'] as num?)?.toDouble() ?? 0;
+            totalStockage += (item['frais_stockage'] as num?)?.toDouble() ?? 0;
+            totalCommission += (item['commission'] as num?)?.toDouble() ?? 0;
+            totalTva += (item['montant_tva'] as num?)?.toDouble() ?? 0;
           }
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
+            padding: const EdgeInsets.all(28),
+
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Vue d'ensemble", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.grey[800])),
-                const SizedBox(height: 20),
-                
-                // Grid des indicateurs (KPIs)
-                _buildKpiGrid(totalPaye, totalEnAttente, totalTransport, totalManutention, totalStockage, totalCommission, totalTva),
-                
-                const SizedBox(height: 32),
-                
-                // Graphique basé sur les données réelles
-                _buildRevenueChart(data),
+
+                /// ================= HEADER =================
+                _buildHeader(),
+
+                const SizedBox(height: 25),
+
+                /// ================= KPIs =================
+                _buildKpiGrid(
+                  totalGlobal,
+                  totalTransport,
+                  totalManutention,
+                  totalStockage,
+                  totalCommission,
+                  totalTva,
+                ),
+
+                const SizedBox(height: 30),
+
+                /// ================= CHART =================
+                _buildChartSection(data),
               ],
             ),
           );
@@ -72,77 +84,252 @@ class EcranFinance extends StatelessWidget {
     );
   }
 
-  Widget _buildKpiGrid(double paye, double attente, double transport, double manut, double stock, double comm, double tva) {
-    return LayoutBuilder(builder: (context, constraints) {
-      int crossAxisCount = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 3 : 2);
-      return GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
-        childAspectRatio: 2.2,
-        children: [
-          _kpiCard("Total Payé", paye, Icons.payments, Colors.green),
-          _kpiCard("À Recevoir", attente, Icons.schedule, Colors.orange),
-          _kpiCard("Transport", transport, Icons.local_shipping, Colors.blue),
-          _kpiCard("Manutention", manut, Icons.handyman, Colors.indigo),
-          _kpiCard("Stockage", stock, Icons.warehouse, Colors.teal),
-          _kpiCard("Commissions", comm, Icons.percent, Colors.purple),
-          _kpiCard("TVA Collectée", tva, Icons.receipt_long, Colors.red),
-        ],
-      );
-    });
-  }
-
-  // --- Graphique avec données dynamiques ---
-  Widget _buildRevenueChart(List<Map<String, dynamic>> data) {
-    // Agrégation par mois
-    Map<int, double> monthlySales = {};
-    for (var item in data) {
-      if (item['created_at'] != null) {
-        DateTime date = DateTime.parse(item['created_at']);
-        int month = date.month;
-        monthlySales[month] = (monthlySales[month] ?? 0) + ((item['prix_total'] as num?)?.toDouble() ?? 0);
-      }
-    }
-
+  /// =======================================================
+  /// HEADER (STYLE SaaS)
+  /// =======================================================
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [
+            Colors.blue.shade800,
+            Colors.blue.shade500,
+          ],
+        ),
+      ),
+      child: Row(
         children: [
-          Text("Chiffre d'affaires par mois", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 32),
-          SizedBox(height: 250, child: BarChart(
-            BarChartData(
-              barGroups: List.generate(12, (index) {
-                return BarChartGroupData(
-                  x: index + 1,
-                  barRods: [BarChartRodData(toY: monthlySales[index + 1] ?? 0, color: Colors.blueAccent, width: 16, borderRadius: BorderRadius.circular(4))],
-                );
-              }),
-              titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, m) => Text("M${v.toInt()}")))),
-            ),
-          )),
+          const Icon(Icons.bar_chart, color: Colors.white, size: 40),
+          const SizedBox(width: 15),
+
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Finance Dashboard",
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                "Analyse des revenus & charges en temps réel",
+                style: GoogleFonts.poppins(
+                  color: Colors.white70,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          )
         ],
       ),
     );
   }
 
-  Widget _kpiCard(String title, double value, IconData icon, Color color) {
+  /// =======================================================
+  /// KPI GRID RESPONSIVE
+  /// =======================================================
+  Widget _buildKpiGrid(
+    double total,
+    double transport,
+    double manut,
+    double stock,
+    double comm,
+    double tva,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount =
+            constraints.maxWidth > 1200
+                ? 3
+                : constraints.maxWidth > 800
+                    ? 2
+                    : 1;
+
+        return GridView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 3,
+          ),
+
+          children: [
+            _kpiCard("Total payé", total, Icons.receipt_long, Colors.green),
+            _kpiCard("Transport", transport, Icons.local_shipping, Colors.blue),
+            _kpiCard("Manutention", manut, Icons.handyman, Colors.indigo),
+            _kpiCard("Stockage", stock, Icons.warehouse, Colors.teal),
+            _kpiCard("Commissions", comm, Icons.percent, Colors.purple),
+            _kpiCard("TVA", tva, Icons.payments, Colors.red),
+          ],
+        );
+      },
+    );
+  }
+
+  /// =======================================================
+  /// CHART SECTION (CLEAN + CARD STYLE)
+  /// =======================================================
+  Widget _buildChartSection(List<Map<String, dynamic>> data) {
+    final Map<int, double> monthlySales = {};
+
+    /// GROUP BY MONTH
+    for (final item in data) {
+      final rawDate = item['created_at'];
+
+      if (rawDate != null) {
+        final date = DateTime.tryParse(rawDate.toString());
+
+        if (date != null) {
+          final month = date.month;
+
+          monthlySales[month] =
+              (monthlySales[month] ?? 0) +
+              ((item['prix_total'] as num?)?.toDouble() ?? 0);
+        }
+      }
+    }
+
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.withOpacity(0.1)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
+      padding: const EdgeInsets.all(24),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 18,
+          )
+        ],
+      ),
+
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          /// TITLE
+          Text(
+            "Chiffre d'affaires mensuel",
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          /// CHART
+          SizedBox(
+            height: 260,
+            child: BarChart(
+              BarChartData(
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          "M${value.toInt()}",
+                          style: const TextStyle(fontSize: 10),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                barGroups: List.generate(12, (index) {
+                  final value = monthlySales[index + 1] ?? 0;
+
+                  return BarChartGroupData(
+                    x: index + 1,
+                    barRods: [
+                      BarChartRodData(
+                        toY: value,
+                        width: 14,
+                        borderRadius: BorderRadius.circular(6),
+                        color: Colors.blue,
+                      )
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// =======================================================
+  /// KPI CARD (MODERNE)
+  /// =======================================================
+  Widget _kpiCard(
+    String title,
+    double value,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.withOpacity(0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+          )
+        ],
+      ),
+
       child: Row(
         children: [
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 24)),
-          const SizedBox(width: 16),
-          Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 13)),
-            Text("${value.toStringAsFixed(2)} \$", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
-          ])),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+
+                Text(
+                  "${value.toStringAsFixed(2)} \$",
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
