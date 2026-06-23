@@ -1,4 +1,5 @@
 import 'package:bourse_agricole_web/ui/navigation/lib/ui/views/admin/audit_logs.dart';
+import 'package:bourse_agricole_web/ui/views/admin/statistiques_admin.dart';
 import 'package:bourse_agricole_web/ui/views/finance/page_disputes.dart';
 import 'package:bourse_agricole_web/ui/views/finance/page_validation.dart';
 import 'package:flutter/material.dart';
@@ -35,9 +36,10 @@ class AppRouter {
       case '/entree_produit': return MaterialPageRoute(builder: (_) => const AjouterProduit(isDialog: false));
       case '/inventaire': return MaterialPageRoute(builder: (_) => const InventaireScreen());
       case '/reports_stock': return MaterialPageRoute(builder: (_) => const EcranRapports());
+      case '/stats_stock': return MaterialPageRoute(builder: (_) => const EcranStatistiques());
 
       // Admin
-      case '/admin': case '/stats': return MaterialPageRoute(builder: (_) => const EcranStatistiques());
+      case '/admin': case '/stats': return MaterialPageRoute(builder: (_) => const StatistiquesAdmin());
       case '/users_manage': return MaterialPageRoute(builder: (_) => const GestionUtilisateurs());
       case '/warehouses': case '/entrepots': return MaterialPageRoute(builder: (_) => const GestionEntrepots());
       case '/logs': return MaterialPageRoute(builder: (_) => const AuditLogsScreen());

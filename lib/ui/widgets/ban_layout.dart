@@ -45,9 +45,9 @@ class BanLayout extends StatelessWidget {
     switch (role.toLowerCase()) {
       case 'admin':
         return [
-          MenuItem("TABLEAU DE BORD", Icons.dashboard_rounded, '/admin'),
           MenuItem("UTILISATEURS", Icons.people_alt_rounded, '/users_manage'),
           MenuItem("ENTREPÔTS", Icons.store_mall_directory_rounded, '/warehouses'),
+          MenuItem("STATISTIQUES", Icons.dashboard_rounded, '/admin'),
           MenuItem("AUDIT LOGS", Icons.security_rounded, '/logs'),
         ];
 
@@ -65,7 +65,7 @@ class BanLayout extends StatelessWidget {
           MenuItem("ENTRÉES", Icons.login_rounded, '/mouvements'),
           MenuItem("SORTIES", Icons.logout_rounded, '/gestion_sorties'),
           MenuItem("INVENTAIRE", Icons.inventory_2_rounded, '/inventaire'),
-          MenuItem("STATISTIQUES", Icons.analytics_rounded, '/stats'),
+          MenuItem("STATISTIQUES", Icons.analytics_rounded, '/stats_stock'),
           MenuItem("RAPPORTS", Icons.description_outlined, '/reports_stock'),
         ];
 

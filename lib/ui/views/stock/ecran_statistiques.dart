@@ -13,7 +13,7 @@ class EcranStatistiques extends StatelessWidget {
 
     return BanLayout(
       title: "ANALYSE ET STATISTIQUES",
-      activeRoute: '/stats',
+      activeRoute: '/stats_stock',
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase.from('produits').stream(primaryKey: ['id']),
         builder: (context, snapshot) {
