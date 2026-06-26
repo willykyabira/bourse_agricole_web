@@ -7,10 +7,10 @@ class AjouterProduit extends StatefulWidget {
   final bool isDialog;
 
   const AjouterProduit({
-    super.key, 
-    this.productToEdit, 
-    required this.isDialog, 
-    Map<String, dynamic>? produitExistant
+    super.key,
+    this.productToEdit,
+    required this.isDialog,
+    Map<String, dynamic>? produitExistant,
   });
 
   @override
@@ -20,14 +20,16 @@ class AjouterProduit extends StatefulWidget {
 class _AjouterProduitState extends State<AjouterProduit> {
   final Color primaryGreen = const Color(0xFF1B5E20);
   final _formKey = GlobalKey<FormState>();
+  
   bool _isSaving = false;
   bool _isDeleting = false;
-  String? _currentEntrepotId;
-  String? _selectedClientId; 
+  bool _isLoading = true;
   bool _isEditMode = false;
 
+  String? _currentEntrepotId;
+  String? _selectedClientId;
+
   List<Map<String, dynamic>> _clientsSuggestions = [];
-  bool _isLoading = true;
 
   final TextEditingController _nomCtrl = TextEditingController();
   final TextEditingController _catCtrl = TextEditingController();
@@ -39,6 +41,7 @@ class _AjouterProduitState extends State<AjouterProduit> {
   DateTime? _dateRecolte;
   DateTime? _datePeremption;
 
+  // Dictionnaire de correspondance automatique entre cultures et catégories BAN
   final Map<String, String> _mappingCategories = {
     'Tomate': 'Produits frais',
     'Banane': 'Produits frais',
@@ -71,6 +74,7 @@ class _AjouterProduitState extends State<AjouterProduit> {
     _puCtrl.addListener(_calculerPrixTotal);
   }
 
+  // Restitution des valeurs du produit lors du basculement en mode édition
   void _remplirChampsPourEdition() {
     final p = widget.productToEdit!;
     setState(() {
@@ -80,8 +84,8 @@ class _AjouterProduitState extends State<AjouterProduit> {
       _puCtrl.text = p['prix_unitaire']?.toString() ?? '';
       _ptCtrl.text = p['prix_total']?.toString() ?? '';
       _nomClientCtrl.text = p['nom_client']?.toString() ?? '';
-      _selectedClientId = p['client_id']?.toString(); 
-      
+      _selectedClientId = p['client_id']?.toString();
+
       if (p['date_recolte'] != null) {
         _dateRecolte = DateTime.tryParse(p['date_recolte']);
       }
@@ -91,6 +95,7 @@ class _AjouterProduitState extends State<AjouterProduit> {
     });
   }
 
+  // Récupération de l'entrepôt du gestionnaire connecté et de l'annuaire des déposants
   Future<void> _chargerInfosInitiales() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -138,9 +143,10 @@ class _AjouterProduitState extends State<AjouterProduit> {
           width: 600,
           padding: const EdgeInsets.all(30),
           decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 15)]),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 15)],
+          ),
           child: Form(
             key: _formKey,
             child: SingleChildScrollView(
@@ -154,9 +160,10 @@ class _AjouterProduitState extends State<AjouterProduit> {
                       Text(
                         _isEditMode ? "MODIFIER LE PRODUIT" : "RÉCEPTION PRODUIT",
                         style: TextStyle(
-                            color: primaryGreen,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20),
+                          color: primaryGreen,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
                       ),
                       if (_isEditMode)
                         _isDeleting
@@ -187,7 +194,7 @@ class _AjouterProduitState extends State<AjouterProduit> {
                     onSelected: (selection) {
                       setState(() {
                         _nomClientCtrl.text = selection['nom_complet'] ?? '';
-                        _selectedClientId = selection['id']?.toString(); 
+                        _selectedClientId = selection['id']?.toString();
                       });
                     },
                     fieldViewBuilder: (ctx, autocompleteController, focus, onSubmitted) {
@@ -197,14 +204,15 @@ class _AjouterProduitState extends State<AjouterProduit> {
                       return TextFormField(
                         controller: autocompleteController,
                         focusNode: focus,
-                        decoration: _decor("Rechercher un client...", icon: Icons.person_search)
-                            .copyWith(
-                                suffixIcon: _isLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(strokeWidth: 2))
-                                    : const Icon(Icons.arrow_drop_down)),
+                        decoration: _decor("Rechercher un client...", icon: Icons.person_search).copyWith(
+                          suffixIcon: _isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.arrow_drop_down),
+                        ),
                         onChanged: (val) {
                           _nomClientCtrl.text = val;
                           _selectedClientId = null;
@@ -241,15 +249,14 @@ class _AjouterProduitState extends State<AjouterProduit> {
                   const SizedBox(height: 20),
                   _sectionTitle("Informations Produit"),
                   DropdownButtonFormField<String>(
-                    value: _nomCtrl.text.isNotEmpty && _mappingCategories.containsKey(_nomCtrl.text) 
-                        ? _nomCtrl.text 
+                    initialValue: _nomCtrl.text.isNotEmpty && _mappingCategories.containsKey(_nomCtrl.text)
+                        ? _nomCtrl.text
                         : null,
                     decoration: _decor("Type de produit", icon: Icons.inventory_2),
                     items: _mappingCategories.keys
                         .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                         .toList(),
-                    validator: (v) =>
-                        (v == null || v.isEmpty) ? "Le type de produit est requis" : null,
+                    validator: (v) => (v == null || v.isEmpty) ? "Le type de produit est requis" : null,
                     onChanged: (val) {
                       if (val != null) {
                         setState(() {
@@ -292,10 +299,11 @@ class _AjouterProduitState extends State<AjouterProduit> {
 
   Future<void> _choisirDate(bool isR) async {
     final d = await showDatePicker(
-        context: context,
-        initialDate: isR ? (_dateRecolte ?? DateTime.now()) : (_datePeremption ?? DateTime.now()),
-        firstDate: DateTime(2024),
-        lastDate: DateTime(2030));
+      context: context,
+      initialDate: isR ? (_dateRecolte ?? DateTime.now()) : (_datePeremption ?? DateTime.now()),
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2030),
+    );
     if (d != null) {
       setState(() {
         if (isR) {
@@ -317,35 +325,47 @@ class _AjouterProduitState extends State<AjouterProduit> {
               padding: const EdgeInsets.all(18),
             ),
             onPressed: () => Navigator.pop(context),
-            child: const Text("ANNULER",
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "ANNULER",
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
           ),
         ),
         const SizedBox(width: 15),
         Expanded(
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: primaryGreen, padding: const EdgeInsets.all(18)),
+              backgroundColor: primaryGreen,
+              padding: const EdgeInsets.all(18),
+            ),
             onPressed: _isSaving ? null : _sauvegarder,
             child: _isSaving
                 ? const SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(_isEditMode ? "METTRE À JOUR" : "ENREGISTRER",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                : Text(
+                    _isEditMode ? "METTRE À JOUR" : "ENREGISTRER",
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
           ),
         ),
       ],
     );
   }
 
+  // Soumission et validation du payload pour insertion ou mise à jour
   Future<void> _sauvegarder() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_dateRecolte == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          backgroundColor: Colors.orange, content: Text("Veuillez sélectionner la date de récolte.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orange,
+          content: Text("Veuillez sélectionner la date de récolte."),
+        ),
+      );
       return;
     }
 
@@ -366,7 +386,7 @@ class _AjouterProduitState extends State<AjouterProduit> {
         'date_peremption': _datePeremption?.toIso8601String(),
         'nom_categorie': _catCtrl.text,
         'entrepot_id': _currentEntrepotId,
-        'client_id': _selectedClientId, 
+        'client_id': _selectedClientId,
       };
 
       if (_isEditMode) {
@@ -381,10 +401,14 @@ class _AjouterProduitState extends State<AjouterProduit> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: Colors.red, 
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
           duration: const Duration(seconds: 6),
-          content: Text("Erreur de mise à jour : $e")));
+          content: Text("Erreur de mise à jour : $e"),
+        ),
+      );
     }
   }
 
@@ -397,7 +421,7 @@ class _AjouterProduitState extends State<AjouterProduit> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("ANNULER")),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true), 
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text("SUPPRIMER", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
@@ -463,8 +487,14 @@ class _AjouterProduitState extends State<AjouterProduit> {
         fillColor: Colors.grey[50],
       );
 
-  Widget _champ(String l, TextEditingController c,
-          {bool estNum = false, bool actif = true, IconData? icon, bool obligatoire = false}) =>
+  Widget _champ(
+    String l,
+    TextEditingController c, {
+    bool estNum = false,
+    bool actif = true,
+    IconData? icon,
+    bool obligatoire = false,
+  }) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextFormField(
@@ -483,13 +513,21 @@ class _AjouterProduitState extends State<AjouterProduit> {
         child: Container(
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-              border: Border.all(color: Colors.black12), borderRadius: BorderRadius.circular(10)),
-          child: Text(d == null ? l : DateFormat('dd/MM/yyyy').format(d),
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+            border: Border.all(color: Colors.black12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            d == null ? l : DateFormat('dd/MM/yyyy').format(d),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       );
 
   Widget _sectionTitle(String t) => Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(t, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, fontSize: 12)));
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          t,
+          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, fontSize: 12),
+        ),
+      );
 }

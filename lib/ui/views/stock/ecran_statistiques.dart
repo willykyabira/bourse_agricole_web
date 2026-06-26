@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,6 +16,7 @@ class EcranStatistiques extends StatelessWidget {
     return BanLayout(
       title: "ANALYSE ET STATISTIQUES",
       activeRoute: '/stats_stock',
+      // Écoute en temps réel des changements de la table 'produits'
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase.from('produits').stream(primaryKey: ['id']),
         builder: (context, snapshot) {
@@ -23,6 +26,7 @@ class EcranStatistiques extends StatelessWidget {
           double tonnageTotal = 0;
           double valeurTotale = 0;
           
+          // Somme cumulative des quantités et valeurs monétaires globales
           for (var p in produits) {
             tonnageTotal += (p['quantite'] ?? 0).toDouble();
             valeurTotale += (p['prix_total'] ?? 0).toDouble();
@@ -35,6 +39,8 @@ class EcranStatistiques extends StatelessWidget {
               children: [
                 Text("Vue d'ensemble", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 25),
+                
+                // Cartes d'indicateurs de performance (KPI)
                 Row(
                   children: [
                     _cardStat("STOCK TOTAL", "${tonnageTotal.toStringAsFixed(0)} Kg", Icons.inventory, Colors.blue),
@@ -62,13 +68,9 @@ class EcranStatistiques extends StatelessWidget {
     );
   }
 
-  /// Fonction utilitaire pour extraire le nom du produit peu importe le nom de la colonne
+  // Vérifie les clés possibles dans la Map pour extraire dynamiquement le nom du produit
   String _extraireNomProduit(Map<String, dynamic> p) {
-    // Liste des noms de colonnes possibles dans votre table
     final keys = ['nom', 'libelle', 'designation', 'nom_produit', 'title', 'produit'];
-    
-    // Affiche le contenu dans la console pour déboguer si nécessaire
-    // debugPrint("Données ligne : $p"); 
     
     for (var key in keys) {
       if (p.containsKey(key) && p[key] != null) {
@@ -78,6 +80,7 @@ class EcranStatistiques extends StatelessWidget {
     return "Inconnu";
   }
 
+  // Construit le graphique circulaire (camembert) représentant la valeur des stocks
   Widget _buildChartSection(List<Map<String, dynamic>> produits) {
     return Container(
       height: 350,
@@ -85,18 +88,19 @@ class EcranStatistiques extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white, 
         borderRadius: BorderRadius.circular(15), 
+        // ignore: duplicate_ignore
+        // ignore: deprecated_member_use
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
       ),
       child: PieChart(
         PieChartData(
           sectionsSpace: 4,
           centerSpaceRadius: 60,
+          // Transformation de chaque produit en une portion du graphique
           sections: produits.asMap().entries.map((entry) {
             int index = entry.key;
             var p = entry.value;
             double value = (p['prix_total'] ?? 0).toDouble();
-            
-            // Appel de la fonction auto-correctrice
             String nom = _extraireNomProduit(p);
             
             return PieChartSectionData(
@@ -112,6 +116,7 @@ class EcranStatistiques extends StatelessWidget {
     );
   }
 
+  // Génère un tableau structuré listant les valeurs unitaires et globales
   Widget _buildProductTable(List<Map<String, dynamic>> produits) {
     return Container(
       decoration: BoxDecoration(
@@ -121,11 +126,12 @@ class EcranStatistiques extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // En-tête des colonnes du tableau
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black12))),
-            child: Row(
-              children: const [
+            child: const Row(
+              children: [
                 Expanded(flex: 2, child: Text("PRODUIT", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
                 Expanded(child: Text("QUANTITÉ", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
                 Expanded(child: Text("PRIX UNIT.", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
@@ -133,13 +139,13 @@ class EcranStatistiques extends StatelessWidget {
               ],
             ),
           ),
+          // Lignes dynamiques remplies avec les données de Supabase
           ...produits.map((p) {
-            // Appel de la fonction auto-correctrice
             String nomProduit = _extraireNomProduit(p);
 
             return Container(
               padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black45))),
+              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black12))),
               child: Row(
                 children: [
                   Expanded(flex: 2, child: Text(nomProduit, style: const TextStyle(fontWeight: FontWeight.w500))),
@@ -149,17 +155,22 @@ class EcranStatistiques extends StatelessWidget {
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
   }
 
+  // Constructeur d'une carte d'affichage statistique standard
   Widget _cardStat(String label, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(25),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+        decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(15), 
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

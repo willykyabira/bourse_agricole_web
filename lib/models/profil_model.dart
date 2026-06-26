@@ -1,11 +1,11 @@
-// Modèle Profil
+/// Modèle représentant un utilisateur de l'application.
 class ProfilModel {
-  final String id;           // L'ID unique de l'utilisateur (UID Supabase)
-  final String nom;          // Nom complet (ex: Willy Kyabira)
-  final String email;        // Adresse email professionnelle
-  final String role;         // Le rôle : 'admin', 'finance', ou 'stock'
-  final String? telephone;   // Numéro de contact (optionnel)
-  final DateTime? createdAt; // Date de création du compte
+  final String id;
+  final String nom;
+  final String email;
+  final String role;
+  final String? telephone;
+  final DateTime? createdAt;
 
   ProfilModel({
     required this.id,
@@ -16,21 +16,21 @@ class ProfilModel {
     this.createdAt,
   });
 
-  // Transforme les données venant de Supabase (JSON) en objet ProfilModel
+  /// Crée un objet ProfilModel à partir des données de Supabase.
   factory ProfilModel.fromJson(Map<String, dynamic> json) {
     return ProfilModel(
       id: json['id'],
       nom: json['nom'] ?? 'Utilisateur',
       email: json['email'] ?? '',
-      role: json['role'] ?? 'invite', // Rôle par défaut si non défini
+      role: json['role'] ?? 'invite',
       telephone: json['telephone'],
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
     );
   }
 
-  // Prépare les données pour les envoyer ou les mettre à jour dans Supabase
+  /// Convertit l'objet en format JSON pour l'enregistrer dans Supabase.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -41,8 +41,12 @@ class ProfilModel {
     };
   }
 
-  // Petite fonction pratique pour vérifier les permissions rapidement
+  /// Vérifie si l'utilisateur est administrateur.
   bool isAdmin() => role == 'admin';
+
+  /// Vérifie si l'utilisateur appartient au service financier.
   bool isFinance() => role == 'finance';
+
+  /// Vérifie si l'utilisateur est gestionnaire de stock.
   bool isStock() => role == 'stock';
 }

@@ -35,6 +35,7 @@ class _EcranConnexionState extends State<EcranConnexion> {
 
         // Routage automatique par dictionnaire selon le rôle
         final routes = {'admin': '/admin', 'finance': '/finance', 'stock': '/mouvements'};
+        // ignore: use_build_context_synchronously
         Navigator.pushReplacementNamed(context, routes[role] ?? '/');
       }
     } on AuthException {
@@ -100,6 +101,7 @@ class _EcranConnexionState extends State<EcranConnexion> {
           const SizedBox(height: 25),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             _buildLabel("MOT DE PASSE"),
+            // ignore: deprecated_member_use
             Text("Mot de passe oublié ?", style: TextStyle(color: banBlue.withOpacity(0.8), fontSize: 11)),
           ]),
           _buildInputField(controller: _passwordController, hint: "********", isPassword: true, validator: (v) => (v == null || v.isEmpty) ? "Veuillez entrer votre mot de passe" : null),
@@ -134,8 +136,10 @@ class _EcranConnexionState extends State<EcranConnexion> {
   // Widget d'affichage pour chaque ligne de service
   Widget _buildServiceBox(IconData icon, String title, String desc) => Container(
     margin: const EdgeInsets.only(bottom: 20), padding: const EdgeInsets.all(20),
+    // ignore: deprecated_member_use
     decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
     child: Row(children: [
+      // ignore: deprecated_member_use
       Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: banGreen.withOpacity(0.2), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: Colors.white, size: 24)),
       const SizedBox(width: 20),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

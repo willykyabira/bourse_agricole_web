@@ -12,24 +12,18 @@ class InventaireScreen extends StatelessWidget {
     return BanLayout(
       title: "INVENTAIRE GLOBAL",
       activeRoute: '/inventaire',
-
-      /// =====================================================
-      /// STREAM PRODUITS (ENTRÉES)
-      /// =====================================================
+      
+      // 1. Écoute du flux des produits (considérés comme les entrées globales)
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase.from('produits').stream(primaryKey: ['id']),
-
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          /// =====================================================
-          /// STREAM SORTIES
-          /// =====================================================
+          // 2. Écoute croisée du flux des sorties de stock
           return StreamBuilder<List<Map<String, dynamic>>>(
             stream: supabase.from('sorties').stream(primaryKey: ['id']),
-
             builder: (context, snapshotS) {
               if (!snapshotS.hasData) {
                 return const Center(child: CircularProgressIndicator());
@@ -38,38 +32,32 @@ class InventaireScreen extends StatelessWidget {
               final produits = snapshot.data!;
               final sorties = snapshotS.data!;
 
-              /// =====================================================
-              /// CALCUL INVENTAIRE
-              /// =====================================================
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(25),
-
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildHeader(),
-
                     const SizedBox(height: 20),
 
-                    /// ================= TABLE =================
+                    // Tableau d'affichage des stocks nets par produit
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
+                            // ignore: deprecated_member_use
                             color: Colors.black.withOpacity(0.06),
                             blurRadius: 16,
                           )
                         ],
                       ),
-
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-
                         child: Column(
                           children: [
-                            /// HEADER TABLE
+                            // En-tête du tableau
                             Container(
                               padding: const EdgeInsets.all(16),
                               color: Colors.grey.shade100,
@@ -79,42 +67,34 @@ class InventaireScreen extends StatelessWidget {
                                     flex: 3,
                                     child: Text(
                                       "PRODUIT",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      style: TextStyle(fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                   Expanded(
                                     child: Text(
                                       "STOCK",
                                       textAlign: TextAlign.right,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      style: TextStyle(fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
 
-                            /// ROWS
+                            // Lignes générées dynamiquement avec calcul différentiel
                             Column(
                               children: produits.map((p) {
-                                final entree =
-                                    double.tryParse(p['quantite'].toString()) ?? 0;
+                                final entree = double.tryParse(p['quantite'].toString()) ?? 0;
 
+                                // Somme des sorties correspondantes au produit actuel
                                 final sortie = sorties
-                                    .where((s) =>
-                                        s['nom_produit'] == p['nom_produit'])
+                                    .where((s) => s['nom_produit'] == p['nom_produit'])
                                     .fold<double>(
                                       0,
-                                      (sum, s) =>
-                                          sum +
-                                          (double.tryParse(
-                                                  s['quantite'].toString()) ??
-                                              0),
+                                      (sum, s) => sum + (double.tryParse(s['quantite'].toString()) ?? 0),
                                     );
 
+                                // Calcul du stock disponible réel
                                 final stock = entree - sortie;
 
                                 return _buildRow(
@@ -138,9 +118,7 @@ class InventaireScreen extends StatelessWidget {
     );
   }
 
-  // =====================================================
-  // HEADER UI
-  // =====================================================
+  // En-tête graphique de la section Inventaire
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -169,7 +147,7 @@ class InventaireScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                "Entrées - Sorties - Stock actuel",
+                "Entrées - Sorties = Stock actuel",
                 style: TextStyle(color: Colors.white70),
               ),
             ],
@@ -179,9 +157,7 @@ class InventaireScreen extends StatelessWidget {
     );
   }
 
-  // =====================================================
-  // ROW ITEM (ERP STYLE)
-  // =====================================================
+  // Constructeur de ligne avec un badge d'alerte si le stock est bas (< 10)
   Widget _buildRow({
     required String name,
     required double stock,
@@ -196,27 +172,23 @@ class InventaireScreen extends StatelessWidget {
           bottom: BorderSide(color: Colors.grey.shade200),
         ),
       ),
-
       child: Row(
         children: [
-          /// PRODUIT
+          // Désignation du produit
           Expanded(
             flex: 3,
             child: Text(
               name,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
 
-          /// STOCK BADGE
+          // Badge d'état de stock (Rouge si critique, Vert si suffisant)
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: isLow ? Colors.red.shade50 : Colors.green.shade50,
                   borderRadius: BorderRadius.circular(20),

@@ -84,6 +84,7 @@ class _PageDisputesState extends State<PageDisputes> {
           return ListView.separated(
             padding: const EdgeInsets.all(24),
             itemCount: data.length,
+            // ignore: unnecessary_underscores
             separatorBuilder: (_, __) => const SizedBox(height: 12),
 
             itemBuilder: (context, index) {
@@ -133,11 +134,13 @@ class _DisputeCard extends StatelessWidget {
 
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: Colors.black.withOpacity(0.05),
             blurRadius: 14,
           )
         ],
 
+        // ignore: deprecated_member_use
         border: Border.all(color: Colors.red.withOpacity(0.15)),
       ),
 

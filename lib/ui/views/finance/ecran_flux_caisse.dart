@@ -3,9 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:bourse_agricole_web/ui/widgets/ban_layout.dart';
 
-/// =======================================================
-/// TRANSACTIONS FINANCIÈRES (UI SAA S PREMIUM)
-/// =======================================================
 class EcranFluxCaisse extends StatefulWidget {
   const EcranFluxCaisse({super.key});
 
@@ -21,24 +18,16 @@ class _EcranFluxCaisseState extends State<EcranFluxCaisse> {
     return BanLayout(
       title: "TRANSACTIONS",
       activeRoute: '/payments',
-
-      /// ================= BACKGROUND =================
       child: Container(
-        color: const Color(0xFFF6F8FB),
-
+        color: const Color(0xFFF6F8FB), // Fond clair style SaaS
         child: Padding(
           padding: const EdgeInsets.all(24),
-
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-              /// ================= HEADER =================
               _Header(),
-
               const SizedBox(height: 20),
-
-              /// ================= TABLE CARD =================
+              // Conteneur principal de la table des transactions
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
@@ -46,45 +35,40 @@ class _EcranFluxCaisseState extends State<EcranFluxCaisse> {
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
+                        // ignore: deprecated_member_use
                         color: Colors.black.withOpacity(0.05),
                         blurRadius: 20,
-                      )
+                      ),
                     ],
                   ),
-
+                  // Stream temps réel trié par date décroissante
                   child: StreamBuilder<List<Map<String, dynamic>>>(
                     stream: _supabase
                         .from('commandes')
                         .stream(primaryKey: ['id'])
                         .order('created_at', ascending: false),
-
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        );
+                        return const Center(child: CircularProgressIndicator());
                       }
 
                       final data = snapshot.data!;
 
                       if (data.isEmpty) {
-                        return const Center(
-                          child: Text("Aucune transaction"),
-                        );
+                        return const Center(child: Text("Aucune transaction"));
                       }
 
                       return Column(
                         children: [
                           _TableHeader(),
                           const Divider(height: 1),
-
+                          // Liste déroulante optimisée pour afficher les lignes
                           Expanded(
                             child: ListView.builder(
                               padding: EdgeInsets.zero,
                               itemCount: data.length,
-                              itemBuilder: (context, i) {
-                                return _TransactionRow(data[i], i);
-                              },
+                              itemBuilder: (context, i) =>
+                                  _TransactionRow(data[i], i),
                             ),
                           ),
                         ],
@@ -101,20 +85,15 @@ class _EcranFluxCaisseState extends State<EcranFluxCaisse> {
   }
 }
 
-/// =======================================================
-/// HEADER DASHBOARD (STYLE SAAS)
-/// =======================================================
+// En-tête de section avec le dégradé vert officiel BAN
 class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF1B5E20),
-            const Color(0xFF2E7D32),
-          ],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
         ),
         borderRadius: BorderRadius.circular(16),
       ),
@@ -135,22 +114,17 @@ class _Header extends StatelessWidget {
               ),
               Text(
                 "Suivi des transactions en temps réel",
-                style: GoogleFonts.poppins(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
+                style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
   }
 }
 
-/// =======================================================
-/// TABLE HEADER (MODERNE)
-/// =======================================================
+// Ligne d'en-tête de la table définissant l'alignement et les proportions (flex)
 class _TableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -168,17 +142,20 @@ class _TableHeader extends StatelessWidget {
     );
   }
 
-  Widget _h(String t, int flex,
-      {bool alignRight = false, bool center = false}) {
+  // Constructeur de cellule de titre typographiée
+  Widget _h(
+    String t,
+    int flex, {
+    bool alignRight = false,
+    bool center = false,
+  }) {
     return Expanded(
       flex: flex,
       child: Text(
         t,
         textAlign: alignRight
             ? TextAlign.right
-            : center
-                ? TextAlign.center
-                : TextAlign.left,
+            : (center ? TextAlign.center : TextAlign.left),
         style: GoogleFonts.poppins(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -190,9 +167,7 @@ class _TableHeader extends StatelessWidget {
   }
 }
 
-/// =======================================================
-/// ROW TRANSACTION (STYLE CARD LIST PRO)
-/// =======================================================
+// Ligne individuelle affichant les détails formatés d'une transaction
 class _TransactionRow extends StatelessWidget {
   final Map<String, dynamic> item;
   final int index;
@@ -201,25 +176,22 @@ class _TransactionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double total =
-        (item['prix_total'] as num?)?.toDouble() ?? 0.0;
-
+    final double total = (item['prix_total'] as num?)?.toDouble() ?? 0.0;
     final isEven = index.isEven;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-
       decoration: BoxDecoration(
-        color: isEven ? Colors.white : const Color(0xFFFAFBFD),
+        color: isEven
+            ? Colors.white
+            : const Color(0xFFFAFBFD), // Alternance de couleurs
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
-
       child: Row(
         children: [
-
-          /// DATE
+          // Affichage de la date (format AAAA-MM-JJ via extraction de chaîne)
           Expanded(
             flex: 2,
             child: Text(
@@ -230,19 +202,15 @@ class _TransactionRow extends StatelessWidget {
               ),
             ),
           ),
-
-          /// CLIENT
+          // Identité du client
           Expanded(
             flex: 3,
             child: Text(
               item['nom_client'] ?? "Inconnu",
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600,
-              ),
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
           ),
-
-          /// MONTANT
+          // Montant total de la commande
           Expanded(
             flex: 2,
             child: Text(
@@ -254,26 +222,17 @@ class _TransactionRow extends StatelessWidget {
               ),
             ),
           ),
-
-          /// STATUS
-          Expanded(
-            flex: 2,
-            child: Center(
-              child: _Badge(item['statut'] ?? ""),
-            ),
-          ),
+          // Badge d'état de paiement
+          Expanded(flex: 2, child: Center(child: _Badge(item['statut'] ?? ""))),
         ],
       ),
     );
   }
 }
 
-/// =======================================================
-/// BADGE STATUS (SAAS STYLE PILL)
-/// =======================================================
+// Badge stylisé (pilule) adaptant sa couleur selon l'état (Payé / En attente)
 class _Badge extends StatelessWidget {
   final String status;
-
   const _Badge(this.status);
 
   @override

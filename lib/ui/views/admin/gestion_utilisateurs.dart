@@ -5,19 +5,18 @@ import 'package:bourse_agricole_web/ui/widgets/ban_layout.dart';
 
 class GestionUtilisateurs extends StatefulWidget {
   const GestionUtilisateurs({super.key});
-
   @override
   State<GestionUtilisateurs> createState() => _GestionUtilisateursState();
 }
 
 class _GestionUtilisateursState extends State<GestionUtilisateurs> {
   final SupabaseClient supabase = Supabase.instance.client;
-  bool _isPasswordVisible = false;
-  bool _isCheckingAuth = true;
+  bool _isPasswordVisible = false, _isCheckingAuth = true;
   List<Map<String, dynamic>> _entrepots = [];
   
   static const Color _primaryColor = Color(0xFF1B5E20);
 
+  // Écoute en temps réel de la table 'profiles' triée par nom
   final Stream<List<Map<String, dynamic>>> _usersStream = 
       Supabase.instance.client.from('profiles').stream(primaryKey: ['id']).order('nom_complet');
 
@@ -27,9 +26,9 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
     _checkAuthAndLoadData();
   }
 
+  // Vérification de la session utilisateur au démarrage
   Future<void> _checkAuthAndLoadData() async {
-    final session = supabase.auth.currentSession;
-    if (session == null) {
+    if (supabase.auth.currentSession == null) {
       if (mounted) Navigator.pushReplacementNamed(context, '/login');
       return;
     }
@@ -37,22 +36,23 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
     _fetchEntrepots();
   }
 
+  // Récupération initiale de la liste des entrepôts
   Future<void> _fetchEntrepots() async {
     try {
       final response = await supabase.from('entrepots').select('id, nom_entrepot');
       setState(() => _entrepots = List<Map<String, dynamic>>.from(response));
     } catch (e) {
-      debugPrint("Erreur récupération entrepôts : $e");
+      debugPrint("Erreur entrepôts : $e");
     }
   }
 
-  // --- LOGIQUE MÉTIER ---
+  // Filtre pour distinguer le personnel administratif (Staff) des clients
   bool _isStaff(String role) => ['admin', 'stock', 'finance'].contains(role.toLowerCase());
 
+  // Récupération textuelle du nom de l'entrepôt selon son identifiant
   String _getEntrepotName(dynamic id) {
     if (id == null) return "Non assigné";
-    final e = _entrepots.firstWhere((item) => item['id'].toString() == id.toString(), orElse: () => {'nom_entrepot': 'Inconnu'});
-    return e['nom_entrepot'];
+    return _entrepots.firstWhere((item) => item['id'].toString() == id.toString(), orElse: () => {'nom_entrepot': 'Inconnu'})['nom_entrepot'];
   }
 
   @override
@@ -65,7 +65,7 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
       title: "GESTION DES UTILISATEURS",
       activeRoute: '/users_manage',
       child: Container(
-        color: const Color(0xFFF8FAFC), // Fond SaaS épuré (Slate 50)
+        color: const Color(0xFFF8FAFC),
         padding: const EdgeInsets.all(32.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,6 +73,7 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
             _buildHeader(),
             const SizedBox(height: 32),
             Expanded(
+              // Gestion de l'affichage réactif des profils
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _usersStream,
                 builder: (context, snapshot) {
@@ -83,6 +84,7 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
                     return const Center(child: Text("Aucun utilisateur trouvé."));
                   }
 
+                  // Séparation dynamique des flux : Équipe vs Clients
                   final staff = snapshot.data!.where((u) => _isStaff(u['role'] ?? '')).toList();
                   final clients = snapshot.data!.where((u) => !_isStaff(u['role'] ?? '')).toList();
 
@@ -91,11 +93,9 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
                       if (staff.isNotEmpty) ...[
                         const _SectionTitle(title: "ÉQUIPE STAFF"),
                         ...staff.map((u) => _UserCard(
-                          user: u,
-                          isStaff: true,
-                          primaryColor: _primaryColor,
+                          user: u, isStaff: true, primaryColor: _primaryColor,
                           onView: () => _showDetails(u, true),
-                          onEdit: () => _showEditUserDialog(context, u),
+                          onEdit: () => _showAddOrEditDialog(context, user: u),
                           onToggleStatus: () => _toggleStatut(u['id'], u['is_active'] ?? true),
                           onDelete: () => _confirmDelete(u),
                         )),
@@ -104,13 +104,9 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
                       if (clients.isNotEmpty) ...[
                         const _SectionTitle(title: "COMPTES CLIENTS"),
                         ...clients.map((u) => _UserCard(
-                          user: u,
-                          isStaff: false,
-                          primaryColor: _primaryColor,
+                          user: u, isStaff: false, primaryColor: _primaryColor,
                           onView: () => _showDetails(u, false),
-                          onEdit: null,
                           onToggleStatus: () => _toggleStatut(u['id'], u['is_active'] ?? true),
-                          onDelete: null,
                         )),
                       ],
                     ],
@@ -136,21 +132,18 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
         ],
       ),
       ElevatedButton.icon(
-        onPressed: () => _showAddUserDialog(context),
+        onPressed: () => _showAddOrEditDialog(context),
         icon: const Icon(Icons.add),
         label: const Text("NOUVEAU COMPTE", style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.5)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: _primaryColor, 
-          foregroundColor: Colors.white, 
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+          backgroundColor: _primaryColor, foregroundColor: Colors.white, 
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
         ),
       ),
     ],
   );
 
-  // --- DIALOGUES ---
+  // Modale d'affichage des caractéristiques complètes du compte
   void _showDetails(Map<String, dynamic> user, bool isStaff) {
     Map<String, String> data = {
       "Nom complet": user['nom_complet']?.toString() ?? 'N/A',
@@ -185,25 +178,25 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
             )).toList()
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fermer")),
-        ],
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fermer"))],
       )
     );
   }
 
-  void _showAddUserDialog(BuildContext context) {
-    final TextEditingController nomCtrl = TextEditingController();
-    final TextEditingController emailCtrl = TextEditingController();
-    final TextEditingController telCtrl = TextEditingController();
-    final TextEditingController passCtrl = TextEditingController();
-    String selectedRole = 'stock';
-    String? selectedEntrepotId;
+  // Dialogue synthétisé gérant à la fois la création et l'édition d'agents (Évite les doublons de code)
+  void _showAddOrEditDialog(BuildContext context, {Map<String, dynamic>? user}) {
+    final bool isEdit = user != null;
+    final nomCtrl = TextEditingController(text: isEdit ? user['nom_complet'] : "");
+    final emailCtrl = TextEditingController(text: isEdit ? user['email'] : "");
+    final telCtrl = TextEditingController(text: isEdit ? user['telephone'] : "");
+    final passCtrl = TextEditingController();
+    String selectedRole = isEdit ? (user['role'] ?? 'stock') : 'stock';
+    String? selectedEntrepotId = isEdit ? user['entrepot_id']?.toString() : null;
 
     showDialog(context: context, builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("CRÉER UN AGENT", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryColor)),
+        title: Text(isEdit ? "MODIFIER L'UTILISATEUR" : "CRÉER UN AGENT", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryColor)),
         content: SizedBox(width: 450, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           _buildField(nomCtrl, "Nom complet", Icons.person_outline),
           const SizedBox(height: 16),
@@ -211,9 +204,11 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
           const SizedBox(height: 16),
           _buildField(telCtrl, "Contact", Icons.phone_android, type: TextInputType.phone),
           const SizedBox(height: 16),
-          _buildDropdown("Choisir l'entrepôt", selectedEntrepotId, _entrepots.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nom_entrepot'].toString()))).toList(), (v) => setDialogState(() => selectedEntrepotId = v)),
-          const SizedBox(height: 16),
-          _buildField(passCtrl, "Mot de passe", Icons.lock_outline, isPass: true, isVisible: _isPasswordVisible, onToggle: () => setDialogState(() => _isPasswordVisible = !_isPasswordVisible)),
+          _buildDropdown("Changer l'entrepôt", selectedEntrepotId, _entrepots.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nom_entrepot'].toString()))).toList(), (v) => setDialogState(() => selectedEntrepotId = v)),
+          if (!isEdit) ...[
+            const SizedBox(height: 16),
+            _buildField(passCtrl, "Mot de passe", Icons.lock_outline, isPass: true, isVisible: _isPasswordVisible, onToggle: () => setDialogState(() => _isPasswordVisible = !_isPasswordVisible)),
+          ],
           const SizedBox(height: 16),
           _buildDropdown("Rôle", selectedRole, const [
               DropdownMenuItem(value: 'stock', child: Text("Gestionnaire de Stock")),
@@ -225,61 +220,28 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _primaryColor, foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)), 
-            onPressed: () => _creerUtilisateur(nomCtrl.text, emailCtrl.text, telCtrl.text, passCtrl.text, selectedRole, selectedEntrepotId), 
-            child: const Text("CRÉER LE COMPTE")
-          ),
-        ],
-      ),
-    ));
-  }
-
-  void _showEditUserDialog(BuildContext context, Map<String, dynamic> user) {
-    final nomCtrl = TextEditingController(text: user['nom_complet']);
-    final emailCtrl = TextEditingController(text: user['email']);
-    final telCtrl = TextEditingController(text: user['telephone']);
-    String selectedRole = user['role'] ?? 'stock';
-    String? selectedEntrepotId = user['entrepot_id']?.toString();
-
-    showDialog(context: context, builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("MODIFIER L'UTILISATEUR", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryColor)),
-        content: SizedBox(width: 450, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          _buildField(nomCtrl, "Nom complet", Icons.person_outline),
-          const SizedBox(height: 16),
-          _buildField(emailCtrl, "Email", Icons.alternate_email, type: TextInputType.emailAddress),
-          const SizedBox(height: 16),
-          _buildField(telCtrl, "Contact", Icons.phone_android, type: TextInputType.phone),
-          const SizedBox(height: 16),
-          _buildDropdown("Changer l'entrepôt", selectedEntrepotId, _entrepots.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['nom_entrepot'].toString()))).toList(), (v) => setDialogState(() => selectedEntrepotId = v)),
-          const SizedBox(height: 16),
-          _buildDropdown("Changer le rôle", selectedRole, const [
-              DropdownMenuItem(value: 'stock', child: Text("Gestionnaire de Stock")),
-              DropdownMenuItem(value: 'finance', child: Text("Chargé de Finance")),
-              DropdownMenuItem(value: 'admin', child: Text("Administrateur")),
-            ], (v) => setDialogState(() => selectedRole = v!)),
-        ]))),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _primaryColor, foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)), 
+            style: ElevatedButton.styleFrom(backgroundColor: _primaryColor, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)), 
             onPressed: () {
-              _updateUtilisateur(user['id'], {'nom_complet': nomCtrl.text, 'email': emailCtrl.text, 'telephone': telCtrl.text, 'role': selectedRole, 'entrepot_id': selectedEntrepotId});
-              Navigator.pop(context);
+              if (isEdit) {
+                _updateUtilisateur(user['id'], {'nom_complet': nomCtrl.text, 'email': emailCtrl.text, 'telephone': telCtrl.text, 'role': selectedRole, 'entrepot_id': selectedEntrepotId});
+              } else {
+                _creerUtilisateur(nomCtrl.text, emailCtrl.text, telCtrl.text, passCtrl.text, selectedRole, selectedEntrepotId);
+              }
             }, 
-            child: const Text("ENREGISTRER")
+            child: Text(isEdit ? "ENREGISTRER" : "CRÉER LE COMPTE")
           ),
         ],
       ),
     ));
   }
 
-  // --- LOGIQUE SUPABASE ---
+  // --- ACTIONS SUPABASE OUVRIÈRES ---
+
   Future<void> _updateUtilisateur(String userId, Map<String, dynamic> data) async {
-    try { await supabase.from('profiles').update(data).eq('id', userId); _showSnack("Mise à jour réussie", Colors.green); } 
-    catch (e) { _showSnack("Erreur : $e", Colors.red); }
+    try { 
+      await supabase.from('profiles').update(data).eq('id', userId); 
+      _showSnack("Mise à jour réussie", Colors.green); 
+    } catch (e) { _showSnack("Erreur : $e", Colors.red); }
   }
 
   Future<void> _creerUtilisateur(String nom, String email, String tel, String pass, String role, String? entrepotId) async {
@@ -306,13 +268,12 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
 
   void _confirmDelete(Map<String, dynamic> user) {
     showDialog(context: context, builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Text("Confirmer la suppression"),
-      content: Text("Êtes-vous sûr de vouloir supprimer définitivement ${user['nom_complet'] ?? 'cet utilisateur'} ? Cette action est irréversible.", style: const TextStyle(height: 1.5)),
+      content: Text("Supprimer définitivement ${user['nom_complet'] ?? 'cet utilisateur'} ? Cette action est irréversible."),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white, elevation: 0), 
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white), 
           onPressed: () { _supprimerUtilisateur(user['id']); Navigator.pop(context); }, 
           child: const Text("Supprimer")
         ),
@@ -325,62 +286,38 @@ class _GestionUtilisateursState extends State<GestionUtilisateurs> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
   }
 
-  // --- UI HELPERS FORMULAIRE ---
+  // Formulaire : Champ de saisie universel
   Widget _buildField(TextEditingController ctrl, String hint, IconData icon, {bool isPass = false, bool isVisible = false, VoidCallback? onToggle, TextInputType type = TextInputType.text}) => TextField(
-    controller: ctrl,
-    obscureText: isPass && !isVisible,
-    keyboardType: type,
+    controller: ctrl, obscureText: isPass && !isVisible, keyboardType: type,
     decoration: InputDecoration(
-      labelText: hint, 
-      prefixIcon: Icon(icon, color: _primaryColor, size: 22), 
-      filled: true, 
-      fillColor: Colors.grey[50], 
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      labelText: hint, prefixIcon: Icon(icon, color: _primaryColor, size: 22), filled: true, fillColor: Colors.grey[50], 
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _primaryColor, width: 1.5)),
       suffixIcon: isPass ? IconButton(icon: Icon(isVisible ? Icons.visibility : Icons.visibility_off, color: Colors.grey), onPressed: onToggle) : null
     ),
   );
 
+  // Formulaire : Menu déroulant universel
   Widget _buildDropdown(String label, String? value, List<DropdownMenuItem<String>> items, Function(String?) onChanged) => DropdownButtonFormField<String>(
-    value: value,
+    initialValue: value, items: items, onChanged: onChanged,
     decoration: InputDecoration(
-      labelText: label, 
-      prefixIcon: const Icon(Icons.list, color: _primaryColor, size: 22), 
-      filled: true, 
-      fillColor: Colors.grey[50], 
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      labelText: label, prefixIcon: const Icon(Icons.list, color: _primaryColor, size: 22), filled: true, fillColor: Colors.grey[50], 
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _primaryColor, width: 1.5))
     ),
-    items: items,
-    onChanged: onChanged,
   );
 }
 
-// =========================================================================
-// COMPOSANTS UI EXTRAITS (Garantie Architecture Pro & Haute Lisibilité)
-// =========================================================================
+// --- WIDGETS DE COMPOSANTS UI EXTRAITS SÉPARÉS ---
 
 class _SectionTitle extends StatelessWidget {
   final String title;
   const _SectionTitle({required this.title});
-
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16, left: 4),
-      child: Text(
-        title, 
-        style: GoogleFonts.poppins(
-          fontWeight: FontWeight.w600, 
-          fontSize: 13, 
-          color: const Color(0xFF94A3B8), 
-          letterSpacing: 1.2
-        )
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 16, left: 4),
+    child: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+  );
 }
 
 class _UserCard extends StatelessWidget {
@@ -392,15 +329,7 @@ class _UserCard extends StatelessWidget {
   final VoidCallback onToggleStatus;
   final VoidCallback? onDelete;
 
-  const _UserCard({
-    required this.user,
-    required this.isStaff,
-    required this.primaryColor,
-    required this.onView,
-    this.onEdit,
-    required this.onToggleStatus,
-    this.onDelete,
-  });
+  const _UserCard({required this.user, required this.isStaff, required this.primaryColor, required this.onView, this.onEdit, required this.onToggleStatus, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -410,30 +339,17 @@ class _UserCard extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)), 
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))
-        ]
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Row(
           children: [
-            // Avatar
             CircleAvatar(
-              radius: 22,
-              backgroundColor: primaryColor.withOpacity(0.1),
-              child: Text(
-                nom.isNotEmpty ? nom[0].toUpperCase() : '?', 
-                style: GoogleFonts.poppins(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16)
-              ),
+              // ignore: deprecated_member_use
+              radius: 22, backgroundColor: primaryColor.withOpacity(0.1),
+              child: Text(nom.isNotEmpty ? nom[0].toUpperCase() : '?', style: GoogleFonts.poppins(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
             const SizedBox(width: 16),
-            
-            // Informations textuelles
             Expanded(
               flex: 2,
               child: Column(
@@ -445,8 +361,6 @@ class _UserCard extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Badges (Statut et Rôle)
             Expanded(
               flex: 1,
               child: Row(
@@ -458,24 +372,14 @@ class _UserCard extends StatelessWidget {
                 ],
               ),
             ),
-            
             const SizedBox(width: 32),
-
-            // Barre d'actions sécurisée
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _ActionButton(icon: Icons.remove_red_eye_outlined, color: Colors.blueGrey, tooltip: "Détails", onPressed: onView),
-                if (isStaff && onEdit != null) 
-                  _ActionButton(icon: Icons.edit_outlined, color: Colors.blue, tooltip: "Modifier", onPressed: onEdit!),
-                _ActionButton(
-                  icon: isActive ? Icons.block : Icons.check_circle_outline, 
-                  color: isActive ? Colors.orange : Colors.green, 
-                  tooltip: isActive ? "Désactiver" : "Activer", 
-                  onPressed: onToggleStatus
-                ),
-                if (isStaff && onDelete != null) 
-                  _ActionButton(icon: Icons.delete_outline, color: Colors.redAccent, tooltip: "Supprimer", onPressed: onDelete!),
+                if (isStaff && onEdit != null) _ActionButton(icon: Icons.edit_outlined, color: Colors.blue, tooltip: "Modifier", onPressed: onEdit!),
+                _ActionButton(icon: isActive ? Icons.block : Icons.check_circle_outline, color: isActive ? Colors.orange : Colors.green, tooltip: isActive ? "Désactiver" : "Activer", onPressed: onToggleStatus),
+                if (isStaff && onDelete != null) _ActionButton(icon: Icons.delete_outline, color: Colors.redAccent, tooltip: "Supprimer", onPressed: onDelete!),
               ],
             ),
           ],
@@ -488,77 +392,46 @@ class _UserCard extends StatelessWidget {
 class _StatusBadge extends StatelessWidget {
   final bool isActive;
   const _StatusBadge({required this.isActive});
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20)
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: isActive ? Colors.green : Colors.redAccent)),
-          const SizedBox(width: 6),
-          Text(isActive ? "Actif" : "Inactif", style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: isActive ? Colors.green[700] : Colors.redAccent[700])),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    // ignore: deprecated_member_use
+    decoration: BoxDecoration(color: isActive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: isActive ? Colors.green : Colors.redAccent)),
+        const SizedBox(width: 6),
+        Text(isActive ? "Actif" : "Inactif", style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: isActive ? Colors.green[700] : Colors.redAccent[700])),
+      ],
+    ),
+  );
 }
 
 class _RoleBadge extends StatelessWidget {
   final String role;
   const _RoleBadge({required this.role});
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), 
-      child: Text(role, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF475569))), 
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), 
+    child: Text(role, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF475569))), 
+  );
 }
 
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  const _ActionButton({
-    required this.icon, 
-    required this.color, 
-    required this.tooltip, 
-    this.onPressed
-  });
+  final IconData icon; final Color color; final String tooltip; final VoidCallback? onPressed;
+  const _ActionButton({required this.icon, required this.color, required this.tooltip, this.onPressed});
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4.0),
-      child: Tooltip(
-        message: tooltip,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            hoverColor: color.withOpacity(0.05),
-            onTap: onPressed, 
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Icon(
-                icon, 
-                size: 20, 
-                color: onPressed == null ? Colors.grey.shade400 : color
-              ),
-            ),
-          ),
-        ),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 4.0),
+    child: Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8), onTap: onPressed, 
+        child: Padding(padding: const EdgeInsets.all(8.0), child: Icon(icon, size: 20, color: onPressed == null ? Colors.grey.shade400 : color)),
       ),
-    );
-  }
+    ),
+  );
 }

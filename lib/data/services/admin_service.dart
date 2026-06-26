@@ -1,13 +1,21 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Service permettant à l'administrateur de gérer
+/// les utilisateurs, les stocks et les statistiques.
 class AdminService {
-  final _supabase = Supabase.instance.client;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  // --- GESTION DES UTILISATEURS ---
+  // ================= GESTION DES UTILISATEURS =================
+
+  /// Retourne la liste des utilisateurs en temps réel.
   Stream<List<Map<String, dynamic>>> fluxUtilisateurs() {
-    return _supabase.from('profiles').stream(primaryKey: ['id']).order('nom_complet');
+    return _supabase
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .order('nom_complet');
   }
 
+  /// Crée un nouvel utilisateur.
   Future<void> creerAgent({
     required String email,
     required String password,
@@ -28,11 +36,14 @@ class AdminService {
     );
   }
 
+  /// Supprime un utilisateur.
   Future<void> supprimerUtilisateur(String id) async {
     await _supabase.from('profiles').delete().eq('id', id);
   }
 
-  // --- GESTION DU STOCK (MANIOC) ---
+  // ================= GESTION DU STOCK =================
+
+  /// Ajoute un produit au stock.
   Future<void> ajouterStock({
     required double quantite,
     required String typeTraitement,
@@ -49,6 +60,7 @@ class AdminService {
     });
   }
 
+  /// Retourne les produits disponibles.
   Stream<List<Map<String, dynamic>>> fluxStocks() {
     return _supabase
         .from('produits')
@@ -56,15 +68,27 @@ class AdminService {
         .order('date_entree', ascending: false);
   }
 
-  // --- UTILITAIRES ---
+  // ================= OUTILS =================
+
+  /// Récupère la liste des entrepôts.
   Future<List<Map<String, dynamic>>> fetchEntrepots() async {
-    final res = await _supabase.from('entrepots').select('id, nom_entrepot');
-    return List<Map<String, dynamic>>.from(res);
+    final result = await _supabase.from('entrepots').select('id, nom_entrepot');
+
+    return List<Map<String, dynamic>>.from(result);
   }
 
+  /// Retourne les statistiques principales.
   Future<Map<String, int>> fetchStats() async {
-    final resUsers = await _supabase.from('profiles').select().count(CountOption.exact);
-    final resEntrepots = await _supabase.from('entrepots').select().count(CountOption.exact);
-    return {'users': resUsers.count, 'entrepots': resEntrepots.count};
+    final users = await _supabase
+        .from('profiles')
+        .select()
+        .count(CountOption.exact);
+
+    final entrepots = await _supabase
+        .from('entrepots')
+        .select()
+        .count(CountOption.exact);
+
+    return {'users': users.count, 'entrepots': entrepots.count};
   }
 }

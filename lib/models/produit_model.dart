@@ -1,4 +1,4 @@
-// Modèle Produit
+/// Modèle représentant un produit agricole.
 class ProduitModel {
   final String? id;
   final String nom;
@@ -14,7 +14,7 @@ class ProduitModel {
     required this.localisation,
   });
 
-  // Convertit un JSON (de Supabase) en objet Dart
+  /// Crée un objet ProduitModel à partir des données de Supabase.
   factory ProduitModel.fromJson(Map<String, dynamic> json) {
     return ProduitModel(
       id: json['id'],
@@ -25,7 +25,7 @@ class ProduitModel {
     );
   }
 
-  // Convertit l'objet en JSON pour l'envoyer à Supabase
+  /// Convertit l'objet en format JSON pour l'enregistrer dans Supabase.
   Map<String, dynamic> toJson() {
     return {
       'nom': nom,

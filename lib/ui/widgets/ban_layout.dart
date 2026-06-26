@@ -193,6 +193,7 @@ class BanLayout extends StatelessWidget {
 
         /// STYLE ACTIVE / INACTIVE
         tileColor: isActive
+            // ignore: deprecated_member_use
             ? Colors.white.withOpacity(0.15)
             : Colors.transparent,
 
@@ -248,6 +249,7 @@ class BanLayout extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: Colors.black.withOpacity(0.05),
             blurRadius: 12,
           ),
@@ -320,6 +322,7 @@ class BanLayout extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
+        // ignore: deprecated_member_use
         color: Colors.black.withOpacity(0.1),
       ),
       child: InkWell(

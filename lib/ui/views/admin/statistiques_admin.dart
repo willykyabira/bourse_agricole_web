@@ -11,31 +11,33 @@ class StatistiquesAdmin extends StatefulWidget {
 }
 
 class _StatistiquesAdminState extends State<StatistiquesAdmin> {
+  // Instance du client Supabase pour interagir avec la base de données distante
   final SupabaseClient supabase = Supabase.instance.client;
   
-  // --- CONFIGURATION CORRIGÉE SELON VOS CAPTURES SUPABASE ---
+  // Constantes de configuration pour éviter les fautes de frappe (hardcoding) dans les requêtes
   static const String _tableProduits = 'produits';
   static const String _colonneNomProduit = 'nom_produit';
 
+  // Variables d'état pour gérer le chargement (spinners) et l'authentification
   bool _isLoadingGlobalStats = true;
   bool _isCheckingAuth = true;
   bool _isLoadingFilteredProducts = false;
   String? _errorMessage;
 
-  // --- COMPTEURS ISSUS STRICTEMENT DE SUPABASE ---
+  // Compteurs globaux alimentés par les requêtes de comptage (KPI)
   int _countProductsRegistered = 0;
   int _countWarehouses = 0;
   int _countStaffUsers = 0;
   int _countClientUsers = 0;
   int _countTotalOrders = 0;
 
-  // --- DONNÉES DE FILTRAGE ---
+  // Listes et conteneurs pour le système de filtrage par entrepôt
   List<Map<String, dynamic>> _warehousesList = []; 
   String? _selectedWarehouseId; 
   String _selectedWarehouseName = "";
   List<Map<String, dynamic>> _productsInSelectedWarehouse = []; 
 
-  // Thème Graphique (Vert et Blanc)
+  // Palette de couleurs de l'application (Charte graphique BAN)
   static const Color _primaryColor = Color(0xFF1B5E20); 
   static const Color _surfaceColor = Colors.white;
   static const Color _backgroundColor = Color(0xFFF8FAFC); 
@@ -48,9 +50,9 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
     _checkAuthAndLoadData();
   }
 
+  // Vérifie si l'utilisateur possède un jeton de session actif, sinon redirection immédiate
   Future<void> _checkAuthAndLoadData() async {
-    final session = supabase.auth.currentSession;
-    if (session == null) {
+    if (supabase.auth.currentSession == null) {
       if (mounted) Navigator.pushReplacementNamed(context, '/login');
       return;
     }
@@ -58,7 +60,7 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
     _loadGlobalStatistics();
   }
 
-  // --- CHARGEMENT DES DONNÉES RÉELLES ---
+  // Effectue l'ensemble des requêtes asynchrones en parallèle ou à la suite pour alimenter le tableau de bord
   Future<void> _loadGlobalStatistics() async {
     if (!mounted) return;
     setState(() {
@@ -67,7 +69,7 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
     });
     
     try {
-      // 1. Extraction et dédoublonnage du catalogue de produits uniques
+      // 1. Extraction et dédoublonnage automatique via un 'Set' (ne garde que les valeurs uniques)
       final productsRes = await supabase.from(_tableProduits).select(_colonneNomProduit);
       final distinctProducts = List<Map<String, dynamic>>.from(productsRes)
           .where((e) => e[_colonneNomProduit] != null)
@@ -75,12 +77,12 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
           .toSet(); 
       _countProductsRegistered = distinctProducts.length;
 
-      // 2. Récupération des entrepôts réels
+      // 2. Récupération des entrepôts triés par ordre alphabétique
       final warehouseRes = await supabase.from('entrepots').select('id, nom_entrepot').order('nom_entrepot');
       _warehousesList = List<Map<String, dynamic>>.from(warehouseRes);
       _countWarehouses = _warehousesList.length;
 
-      // 3. Récupération et segmentation des utilisateurs (Table profiles)
+      // 3. Récupération et filtrage en mémoire (Where) des types de rôles utilisateurs
       final usersRes = await supabase.from('profiles').select('role');
       final users = List<Map<String, dynamic>>.from(usersRes);
       final staffRoles = ['admin', 'stock', 'finance'];
@@ -88,20 +90,18 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
       _countStaffUsers = users.where((u) => u['role'] != null && staffRoles.contains(u['role'].toString().toLowerCase())).length;
       _countClientUsers = users.length - _countStaffUsers;
 
-      // 4. Volume réel des commandes globales (Table commandes)
+      // 4. Volume global des lignes de commandes enregistrées
       final ordersRes = await supabase.from('commandes').select('id');
       _countTotalOrders = ordersRes.length;
 
-      // Injection automatique du premier entrepôt dans le filtre si disponible
+      // Sélection automatique du premier entrepôt de la liste si aucun choix n'a encore été fait
       if (_warehousesList.isNotEmpty && _selectedWarehouseId == null) {
         _selectedWarehouseId = _warehousesList.first['id'].toString();
         _selectedWarehouseName = _warehousesList.first['nom_entrepot'].toString();
         await _loadProductsByWarehouse(_selectedWarehouseId!);
       }
 
-      if (mounted) {
-        setState(() => _isLoadingGlobalStats = false);
-      }
+      if (mounted) setState(() => _isLoadingGlobalStats = false);
     } catch (e) {
       debugPrint("Erreur Supabase SQL : $e");
       if (mounted) {
@@ -113,7 +113,7 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
     }
   }
 
-  // --- FILTRAGE DYNAMIQUE VIA ENTREPOT_ID ---
+  // Charge les produits spécifiques liés à un entrepôt donné via une clause de filtrage (eq)
   Future<void> _loadProductsByWarehouse(String warehouseId) async {
     if (!mounted) return;
     setState(() => _isLoadingFilteredProducts = true);
@@ -132,7 +132,7 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
         });
       }
     } catch (e) {
-      debugPrint("Erreur lors du filtrage de l'entrepôt $warehouseId : $e");
+      debugPrint("Erreur filtrage entrepôt $warehouseId : $e");
       if (mounted) {
         setState(() {
           _productsInSelectedWarehouse = [];
@@ -167,9 +167,9 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
                   child: Center(child: CircularProgressIndicator(color: _primaryColor)),
                 )
               else ...[
-                _buildKPIGrid(),
+                _buildKPIGrid(), // Grille adaptative des compteurs
                 const SizedBox(height: 40),
-                _buildWarehouseFilterAndProductTableSection(),
+                _buildWarehouseFilterAndProductTableSection(), // Zone de filtrage et tableau
               ],
             ],
           ),
@@ -178,6 +178,7 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
     );
   }
 
+  // En-tête de page avec titre explicatif et bouton de rafraîchissement manuel
   Widget _buildHeader() => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
@@ -194,39 +195,30 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
         icon: const Icon(Icons.sync_rounded, size: 20),
         label: Text("SYNCHRONISER LES DONNÉES", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13, letterSpacing: 0.5)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: _surfaceColor,
-          foregroundColor: _primaryColor,
+          backgroundColor: _surfaceColor, foregroundColor: _primaryColor,
           side: const BorderSide(color: Color(0xFFE2E8F0)),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+          elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
         ),
       ),
     ],
   );
 
+  // Bannière d'erreur rouge élégante affichée en cas de rupture de connexion ou mauvaise requête
   Widget _buildErrorBanner() => Container(
     padding: const EdgeInsets.all(16),
     margin: const EdgeInsets.only(bottom: 24), 
-    decoration: BoxDecoration(
-      color: Colors.red.shade50, 
-      borderRadius: BorderRadius.circular(8), 
-      border: Border.all(color: Colors.red.shade200)
-    ),
+    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
     child: Row(
       children: [
         Icon(Icons.error_outline_rounded, color: Colors.red.shade700),
         const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            _errorMessage!, 
-            style: GoogleFonts.poppins(color: Colors.red.shade800, fontWeight: FontWeight.w500)
-          ),
-        ),
+        Expanded(child: Text(_errorMessage!, style: GoogleFonts.poppins(color: Colors.red.shade800, fontWeight: FontWeight.w500))),
       ],
     ),
   );
 
+  // Grille réactive (LayoutBuilder) modifiant le nombre de cartes affichées par ligne selon la largeur de l'écran
   Widget _buildKPIGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -236,10 +228,8 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
 
         return GridView.count(
           crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 20,
-          mainAxisSpacing: 20,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 20, mainAxisSpacing: 20,
+          shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
           childAspectRatio: 1.5, 
           children: [
             _StatCard(title: "Produits Enregistrés", value: "$_countProductsRegistered", subtitle: "Catalogue d'articles uniques", icon: Icons.assignment_outlined, color: const Color(0xFF4F46E5)), 
@@ -253,15 +243,12 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
     );
   }
 
+  // Section contenant le sélecteur d'entrepôt et le tableau des stocks associés
   Widget _buildWarehouseFilterAndProductTableSection() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: _surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      decoration: BoxDecoration(color: _surfaceColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -279,21 +266,14 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
               _warehousesList.isEmpty
                   ? Text("Aucun entrepôt trouvé", style: TextStyle(color: _textColorSecondary))
                   : Container(
-                      width: 300,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: _backgroundColor,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
+                      width: 300, padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(color: _backgroundColor, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: _selectedWarehouseId,
-                          isExpanded: true,
+                          value: _selectedWarehouseId, isExpanded: true,
                           icon: const Icon(Icons.arrow_drop_down_circle_outlined, color: _primaryColor),
                           style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: _textColorPrimary),
-                          dropdownColor: _surfaceColor,
-                          borderRadius: BorderRadius.circular(10),
+                          dropdownColor: _surfaceColor, borderRadius: BorderRadius.circular(10),
                           items: _warehousesList.map((wh) {
                             return DropdownMenuItem<String>(
                               value: wh['id'].toString(),
@@ -319,11 +299,9 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 12),
 
+          // Choix conditionnel du Widget à afficher selon le statut de chargement ou le volume de données
           _isLoadingFilteredProducts
-              ? const Padding(
-                  padding: EdgeInsets.all(48.0),
-                  child: Center(child: CircularProgressIndicator(color: _primaryColor)),
-                )
+              ? const Padding(padding: EdgeInsets.all(48.0), child: Center(child: CircularProgressIndicator(color: _primaryColor)))
               : _productsInSelectedWarehouse.isEmpty
                   ? _buildEmptyProductsState()
                   : _buildProductsDataTable(),
@@ -332,37 +310,29 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
     );
   }
 
+  // État visuel vide (Placeholder) si l'entrepôt sélectionné ne détient aucun produit enregistré
   Widget _buildEmptyProductsState() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 60),
+      width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 60),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center, 
         children: [
           Icon(Icons.inventory_2_outlined, size: 60, color: Colors.grey.shade300),
           const SizedBox(height: 20),
-          Text(
-            "Aucune marchandise répertoriée.",
-            style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500, color: _textColorSecondary),
-          ),
-          Text(
-            "Les stocks de cet entrepôt sont actuellement à zéro dans la base de données.",
-            style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade500),
-          ),
+          Text("Aucune marchandise répertoriée.", style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500, color: _textColorSecondary)),
+          Text("Les stocks de cet entrepôt sont actuellement à zéro dans la base de données.", style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade500)),
         ],
       ),
     );
   }
 
+  // Construction du tableau de données (DataTable HTML-like) listant les produits
   Widget _buildProductsDataTable() {
     return SizedBox(
       width: double.infinity,
       child: DataTable(
         headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-        dataRowMinHeight: 60,
-        dataRowMaxHeight: 60,
-        horizontalMargin: 12,
-        columnSpacing: 24,
+        dataRowMinHeight: 60, dataRowMaxHeight: 60, horizontalMargin: 12, columnSpacing: 24,
         columns: [
           DataColumn(label: _buildTableHeader("NOM PRODUIT")),
           DataColumn(label: _buildTableHeader("QUANTITÉ ENTRÉES")),
@@ -371,27 +341,20 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
           DataColumn(label: _buildTableHeader("LOCALISATION ENTREPOT")),
         ],
         rows: _productsInSelectedWarehouse.map((product) {
+          // Cast sécurisé de l'élément numérique dynamique en double avant traitement
           final double qteStock = (product['quantite'] as num? ?? 0.0).toDouble();
           
           return DataRow(cells: [
-            // 1. Nom Produit
             DataCell(Text(product[_colonneNomProduit] ?? 'Manioc', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14, color: _textColorPrimary))),
-            
-            // 2. Quantité Entrées (Valeur indicative / à connecter à vos logs de mouvements)
             DataCell(Text("0", style: GoogleFonts.poppins(color: _textColorSecondary, fontSize: 14))),
-            
-            // 3. Quantité Sorties (Valeur indicative / à connecter à vos logs de mouvements)
             DataCell(Text("0", style: GoogleFonts.poppins(color: _textColorSecondary, fontSize: 14))),
-            
-            // 4. En Stock
             DataCell(
               Text(
+                // Supprime les décimales .0 inutiles pour un affichage propre (ex: 50 au lieu de 50.0)
                 qteStock.toStringAsFixed(qteStock.truncateToDouble() == qteStock ? 0 : 2),
                 style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16, color: qteStock > 0 ? _primaryColor : Colors.red.shade700),
               ),
             ),
-            
-            // 5. Localisation Entrepôt
             DataCell(Text(_selectedWarehouseName, style: GoogleFonts.poppins(color: _textColorSecondary, fontWeight: FontWeight.w500, fontSize: 14))),
           ]);
         }).toList(),
@@ -400,12 +363,11 @@ class _StatistiquesAdminState extends State<StatistiquesAdmin> {
   }
 
   Widget _buildTableHeader(String text) {
-    return Text(
-      text,
-      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: const Color(0xFF64748B), letterSpacing: 0.5),
-    );
+    return Text(text, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: const Color(0xFF64748B), letterSpacing: 0.5));
   }
 }
+
+// --- WIDGET ENCAPSULÉ : CARTE DE STATISTIQUE INDIVIDUELLE (KPI) ---
 
 class _StatCard extends StatelessWidget {
   final String title;
@@ -420,18 +382,13 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(title, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF64748B))),
                 const SizedBox(height: 8),
@@ -444,6 +401,7 @@ class _StatCard extends StatelessWidget {
           const SizedBox(width: 10),
           Container(
             padding: const EdgeInsets.all(16),
+            // ignore: deprecated_member_use
             decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
             child: Icon(icon, color: color, size: 30),
           )
