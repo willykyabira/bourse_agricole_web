@@ -88,7 +88,7 @@ class DestockageScreen extends StatelessWidget {
                       onPressed: () => _showSortieDialog(context),
                       icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
                       label: const Text(
-                        "ENREGISTRER UNE COMMANDE / SORTIE",
+                        "ENREGISTRER UNE SORTIE",
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -226,7 +226,7 @@ class DestockageScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isEditing ? "Modifier la ligne de sortie" : "Enregistrer une commande / livraison"),
+        title: Text(isEditing ? "Modifier la ligne de sortie" : "Enregistrer une livraison"),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
